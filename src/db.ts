@@ -111,22 +111,37 @@ export interface KhaataAccount {
   id?: number;
   name: string;
   phone: string;
-  createdAt: string;
+  notes?: string;
+  date?: string;
+  createdAt?: string;
+  _syncId?: string;
+  _updatedAt?: number;
+  _deletedAt?: number | null;
 }
 
-export interface Khaata {
+export interface KhaataEntry {
   id?: number;
   accountId: number;
+  type?: 'give' | 'receive' | string;
+  details?: string;
+  itemDetail?: string;
+  mixWeight?: number;
+  mixWazan?: number;
+  pakaye?: number;
+  kaatRati?: number;
+  kaatInRati?: number;
+  pureWeight?: number;
+  itemPasa?: number;
+  pasaDia?: number;
+  totalBaqaya?: number;
   date: string;
-  itemDetail: string;
-  pakaye: number;
-  mixWazan: number;
-  kaatInRati: number;
-  itemPasa: number;
-  pasaDia: number;
-  totalBaqaya: number;
   img?: string | null;
+  _syncId?: string;
+  _updatedAt?: number;
+  _deletedAt?: number | null;
 }
+
+export type Khaata = KhaataEntry;
 
 export interface Setting {
   id?: string;
@@ -144,7 +159,11 @@ export class MyDatabase extends Dexie {
   goldPurchases!: Table<GoldPurchase>;
   expenses!: Table<Expense>;
   khaataAccounts!: Table<KhaataAccount>;
-  khaata!: Table<Khaata>;
+  khaata!: Table<KhaataEntry>;
+
+  get khaataEntries(): Table<KhaataEntry> {
+    return this.khaata;
+  }
 
   constructor() {
     super('NafeesERP_V58_Final');

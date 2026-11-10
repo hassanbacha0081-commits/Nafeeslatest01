@@ -128,6 +128,18 @@ export const translations = {
     weightUnitsSetting: "وزن کی بنیادی اکائی",
     tolaUnit: "تولہ (11.664 گرام)",
     gramUnit: "گرام",
+    khaataLabels: {
+      pakaye: "پکائی",
+      mixWazan: "مکس وزن",
+      kaatInRati: "کاٹ رتی",
+      itemPasa: "آئٹم پاسہ",
+      pasaDia: "پاسہ دیا",
+      totalBaqaya: "بقایا",
+      image: "تصویر",
+      actions: "کارروائیاں",
+      runningLedger: "تفصیلی لیجر بک (Running Ledger Statement)",
+      searchPlaceholder: "آئٹم تلاش کریں (جیسے انگوٹھی، کانٹا)..."
+    },
     karigarLabels: {
       name: "نام",
       mobile: "موبائل",
@@ -138,7 +150,13 @@ export const translations = {
       kaatCalc: "حساب کاٹ",
       pureBalance: "صاف بقایا",
       labReport: "لیبارٹری رپورٹ (کیمرہ):",
-      searchKarigar: "نام یا موبائل سے تلاش کریں..."
+      searchKarigar: "نام یا موبائل سے تلاش کریں...",
+      clearBalance: "حساب صاف کریں",
+      clearBalanceModalTitle: "بقایا سونا وصول / حساب صاف کریں",
+      clearFullBalance: "مکمل صاف کریں (Full Clear)",
+      customReceiveGold: "بقایا سونا وزن (g)",
+      clearSuccess: "بقایا سونا وصول کر کے حساب صاف کر دیا گیا!",
+      clearedBadge: "✓ صاف / بے باق"
     },
     itemDetailsList: [
       "انگوٹھی",
@@ -293,6 +311,18 @@ export const translations = {
     weightUnitsSetting: "Default Weight Unit",
     tolaUnit: "Tola (11.664g)",
     gramUnit: "Gram",
+    khaataLabels: {
+      pakaye: "Pakai",
+      mixWazan: "Mix Wazan",
+      kaatInRati: "Kaat Rati",
+      itemPasa: "Item Pasa",
+      pasaDia: "Pasa Dia",
+      totalBaqaya: "Baqaya",
+      image: "Image",
+      actions: "Actions",
+      runningLedger: "Running Ledger Statement",
+      searchPlaceholder: "Search items (e.g. Ring, Kanta)..."
+    },
     karigarLabels: {
       name: "Name",
       mobile: "Mobile",
@@ -303,7 +333,13 @@ export const translations = {
       kaatCalc: "Kaat Calculation",
       pureBalance: "Pure Balance",
       labReport: "Lab Report (Camera):",
-      searchKarigar: "Search by name or mobile..."
+      searchKarigar: "Search by name or mobile...",
+      clearBalance: "Clear Balance",
+      clearBalanceModalTitle: "Receive Remaining Gold / Clear Balance",
+      clearFullBalance: "Clear Full Balance",
+      customReceiveGold: "Remaining Gold Weight (g)",
+      clearSuccess: "Remaining gold received and balance cleared!",
+      clearedBadge: "✓ Clear / Settled"
     },
     itemDetailsList: [
       "Ring",

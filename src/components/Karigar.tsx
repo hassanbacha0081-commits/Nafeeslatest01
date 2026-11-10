@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type KarigarRecord } from '../db';
 import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
-import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, Edit, Image as ImageIcon, AlertTriangle, X, Download, AlertCircle } from 'lucide-react';
+import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, Edit, Image as ImageIcon, AlertTriangle, X, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -28,6 +28,11 @@ export default function Karigar({ lang }: KarigarProps) {
   const [editId, setEditId] = useState<number | null>(null);
   const [currentImg, setCurrentImg] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+
+  // Settlement / Clear balance state
+  const [settleModalRecord, setSettleModalRecord] = useState<KarigarRecord | null>(null);
+  const [settleAmount, setSettleAmount] = useState<number>(0);
+  const [isFullSettle, setIsFullSettle] = useState<boolean>(true);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -263,6 +268,35 @@ export default function Karigar({ lang }: KarigarProps) {
     setLightboxImage(src);
   };
 
+  const handleSettleSubmit = async () => {
+    if (!settleModalRecord || !settleModalRecord.id) return;
+    const existingRec = Number(settleModalRecord.rec) || 0;
+    const existingGiven = Number(settleModalRecord.given) || 0;
+    const existingKaat = Number(settleModalRecord.kaat) || 0;
+    const currentNet = Number(settleModalRecord.net) || 0;
+    
+    // Amount of gold received in this settlement
+    const receivedToAdd = isFullSettle ? currentNet : (Number(settleAmount) || 0);
+    if (isNaN(receivedToAdd) || receivedToAdd <= 0) {
+      alert(lang === 'ur' ? 'براہ کرم درست وزن درج کریں!' : 'Please enter a valid weight!');
+      return;
+    }
+
+    const newRec = Number((existingRec + receivedToAdd).toFixed(2));
+    const calculatedNet = Math.max(0, Number(((existingGiven - newRec) - existingKaat).toFixed(2)));
+    const newNet = isFullSettle ? 0 : calculatedNet;
+
+    const updatedEntry: KarigarRecord = {
+      ...settleModalRecord,
+      rec: newRec,
+      net: newNet
+    };
+
+    await db.karigars.put(updatedEntry);
+    setSettleModalRecord(null);
+    alert(t.karigarLabels.clearSuccess || (lang === 'ur' ? 'بقایا سونا وصول کر کے حساب صاف کر دیا گیا!' : 'Remaining gold received and balance cleared!'));
+  };
+
   const { res, net } = reCalc();
 
   return (
@@ -482,59 +516,110 @@ export default function Karigar({ lang }: KarigarProps) {
         {karigars?.map((v) => (
           <div 
             key={v.id} 
-            className="bg-white p-4 rounded-xl border border-sky-200 shadow-sm border-r-8 border-gold"
+            className={`bg-white p-5 rounded-2xl border shadow-sm transition-all ${
+              v.net <= 0 
+                ? 'border-emerald-300 border-r-8 border-r-emerald-500 bg-emerald-50/20' 
+                : 'border-sky-200 border-r-8 border-r-gold'
+            }`}
           >
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-sm font-bold urdu-text text-zinc-500">نام / تاریخ:</span>
-              <span className="text-sm text-zinc-900"><b>{v.name}</b> ({v.date})</span>
+            <div className="flex flex-wrap justify-between items-start gap-2 mb-3">
+              <div>
+                <h4 className="text-lg font-bold text-zinc-900 urdu-text flex items-center gap-2">
+                  <span>{v.name}</span>
+                  {v.phone && <span className="text-xs text-zinc-500 font-mono" dir="ltr">({v.phone})</span>}
+                </h4>
+                <p className="text-xs text-zinc-600 font-nastaliq mt-1">
+                  ٹاسک: <span className="font-bold text-zinc-800">{v.task || '---'}</span> | تاریخ: {v.date}
+                </p>
+              </div>
+
+              <div>
+                {Number(v.net) <= 0 ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-100 text-emerald-800 rounded-xl text-xs font-bold border border-emerald-300 shadow-2xs urdu-text">
+                    <CheckCircle2 size={16} />
+                    {t.karigarLabels.clearedBadge || '✓ صاف / بے باق'} (0.00g)
+                  </span>
+                ) : (
+                  <div className="bg-red-50 px-3.5 py-1.5 rounded-xl border border-red-200 text-right">
+                    <span className="text-[11px] text-red-600 font-bold block urdu-text">بقایا سونا:</span>
+                    <span className="text-xl font-black text-red-600 font-mono">{(Number(v.net) || 0).toFixed(2)}g</span>
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-sm font-bold urdu-text text-zinc-500">بقایا:</span>
-              <b className="text-red-600 text-lg">{v.net.toFixed(2)}g</b>
+
+            {/* Gold Breakdown Bar */}
+            <div className="grid grid-cols-3 gap-2 bg-zinc-50 p-2.5 rounded-xl text-center border border-zinc-200/80 mb-4 text-xs font-mono">
+              <div>
+                <span className="text-[10px] text-zinc-500 block urdu-text font-bold">دیا (Given)</span>
+                <span className="font-bold text-zinc-800">{v.given}g</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 block urdu-text font-bold">وصول (Rec)</span>
+                <span className="font-bold text-emerald-700">{v.rec}g</span>
+              </div>
+              <div>
+                <span className="text-[10px] text-zinc-500 block urdu-text font-bold">کاٹ (Kaat)</span>
+                <span className="font-bold text-zinc-800">{v.kaat}g</span>
+              </div>
             </div>
-            
-            <div className="flex gap-2 pt-4 border-t border-sky-100 flex-wrap">
+
+            <div className="flex gap-2 pt-3 border-t border-sky-100 flex-wrap">
+              {Number(v.net) > 0 && (
+                <button 
+                  onClick={() => {
+                    setSettleModalRecord(v);
+                    setSettleAmount(Number(v.net) || 0);
+                    setIsFullSettle(true);
+                  }}
+                  className="flex-[2] min-w-[130px] p-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1.5 shadow-md active:scale-98 cursor-pointer"
+                >
+                  <CheckCircle2 size={16} />
+                  <span>{t.karigarLabels.clearBalance || 'حساب صاف کریں'}</span>
+                </button>
+              )}
+
               <button 
                 onClick={() => {
                   setPrintData({ data: v, id: v.id! });
                   setShowPrintPreview(true);
                   setTimeout(async () => {
                     const url = await generatePDF(v, v.id!);
-                      if (url) {
-                        setPdfUrl(url);
-                      } else {
-                        setShowPrintPreview(false);
-                        alert('PDF generation failed. Please try again or check the image format.');
-                      }
+                    if (url) {
+                      setPdfUrl(url);
+                    } else {
+                      setShowPrintPreview(false);
+                      alert('PDF generation failed. Please try again or check the image format.');
+                    }
                   }, 400);
                 }}
-                className="flex-1 min-w-[80px] p-2 bg-sky-50 text-gold-dark rounded-lg hover:bg-gold hover:text-black transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
+                className="flex-1 min-w-[75px] p-2 bg-sky-50 text-gold-dark rounded-xl hover:bg-gold hover:text-black transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
               >
                 <Printer size={14} /> رسید
               </button>
               <button 
                 onClick={() => editE(v)}
-                className="flex-1 min-w-[80px] p-2 bg-sky-50 text-zinc-600 rounded-lg hover:bg-sky-100 transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
+                className="flex-1 min-w-[75px] p-2 bg-sky-50 text-zinc-600 rounded-xl hover:bg-sky-100 transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
               >
                 <Edit size={14} /> ایڈٹ
               </button>
               <button 
                 onClick={() => sendW(v.phone, v.name, v.net)}
-                className="flex-1 min-w-[80px] p-2 bg-green-600-10 text-green-600 rounded-lg hover:bg-green-600 hover:text-white transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-green-600-20"
+                className="flex-1 min-w-[75px] p-2 bg-green-50 text-green-700 rounded-xl hover:bg-green-600 hover:text-white transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-green-200"
               >
                 <MessageCircle size={14} /> واٹس ایپ
               </button>
               {v.img && (
                 <button 
                   onClick={() => showImg(v.img!)}
-                  className="flex-1 min-w-[80px] p-2 bg-sky-50 text-zinc-600 rounded-lg hover:bg-sky-100 transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
+                  className="flex-1 min-w-[75px] p-2 bg-sky-50 text-zinc-600 rounded-xl hover:bg-sky-100 transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-sky-100"
                 >
                   <ImageIcon size={14} /> رپورٹ
                 </button>
               )}
               <button 
                 onClick={() => v.id && setDeleteId(v.id)}
-                className="flex-1 min-w-[80px] p-2 bg-red-100 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-red-200"
+                className="flex-1 min-w-[75px] p-2 bg-red-50 text-red-600 rounded-xl hover:bg-red-600 hover:text-white transition-all text-xs font-bold urdu-text flex items-center justify-center gap-1 border border-red-200"
               >
                 <Trash2 size={14} /> ختم
               </button>
@@ -542,6 +627,115 @@ export default function Karigar({ lang }: KarigarProps) {
           </div>
         ))}
       </div>
+
+      {/* Settle / Clear Gold Balance Modal */}
+      {settleModalRecord && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border-2 border-emerald-500">
+            <div className="p-4 bg-emerald-700 text-white flex justify-between items-center">
+              <h3 className="text-lg font-bold urdu-text flex items-center gap-2">
+                <CheckCircle2 size={20} />
+                {t.karigarLabels.clearBalanceModalTitle || 'بقایا سونا وصول / حساب صاف کریں'}
+              </h3>
+              <button 
+                onClick={() => setSettleModalRecord(null)}
+                className="p-1 hover:bg-emerald-800 rounded-full transition-colors text-white"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 space-y-2">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-zinc-600 font-bold urdu-text">کاریگر کا نام:</span>
+                  <span className="font-bold text-zinc-900">{settleModalRecord.name}</span>
+                </div>
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-zinc-600 font-bold urdu-text">ٹاسک:</span>
+                  <span className="font-medium text-zinc-800">{settleModalRecord.task || '---'}</span>
+                </div>
+                <div className="flex justify-between items-center text-base border-t border-emerald-200 pt-2 mt-2">
+                  <span className="text-emerald-900 font-bold urdu-text">موجودہ بقایا سونا:</span>
+                  <span className="font-black text-red-600 text-xl font-mono">{(Number(settleModalRecord.net) || 0).toFixed(2)}g</span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-center gap-3 p-3 bg-zinc-50 border rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
+                  <input 
+                    type="radio" 
+                    name="settleOption" 
+                    checked={isFullSettle}
+                    onChange={() => {
+                      setIsFullSettle(true);
+                      setSettleAmount(Number(settleModalRecord.net) || 0);
+                    }}
+                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div>
+                    <span className="block font-bold text-sm text-zinc-900 urdu-text">
+                      {t.karigarLabels.clearFullBalance || 'مکمل صاف کریں (Full Clear)'}
+                    </span>
+                    <span className="text-xs text-zinc-500">
+                      ({(Number(settleModalRecord.net) || 0).toFixed(2)}g سونا مکمل وصول کریں)
+                    </span>
+                  </div>
+                </label>
+
+                <label className="flex items-center gap-3 p-3 bg-zinc-50 border rounded-xl cursor-pointer hover:bg-emerald-50 transition-colors">
+                  <input 
+                    type="radio" 
+                    name="settleOption" 
+                    checked={!isFullSettle}
+                    onChange={() => setIsFullSettle(false)}
+                    className="w-4 h-4 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <div className="flex-1">
+                    <span className="block font-bold text-sm text-zinc-900 urdu-text">
+                      جزوی سونا وصول کریں (Partial Receive)
+                    </span>
+                  </div>
+                </label>
+
+                {!isFullSettle && (
+                  <div className="pr-7 space-y-1">
+                    <label className="text-xs font-bold text-zinc-600 urdu-text block">
+                      {t.karigarLabels.customReceiveGold || 'وصول شدہ سونا (g)'}:
+                    </label>
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      value={settleAmount || ''}
+                      onChange={e => setSettleAmount(Number(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full p-3 bg-white border border-emerald-300 rounded-xl outline-none focus:border-emerald-600 font-bold text-lg text-black text-center"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button 
+                  type="button"
+                  onClick={() => setSettleModalRecord(null)}
+                  className="flex-1 p-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-bold rounded-xl urdu-text transition-colors cursor-pointer"
+                >
+                  منسوخ (Cancel)
+                </button>
+                <button 
+                  type="button"
+                  onClick={handleSettleSubmit}
+                  className="flex-[2] p-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl urdu-text transition-colors shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <CheckCircle2 size={18} />
+                  وصول اور صاف کریں
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {lightboxImage && (
         <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} title={lang === 'ur' ? 'لیبارٹری رپورٹ' : 'Lab Report'} />

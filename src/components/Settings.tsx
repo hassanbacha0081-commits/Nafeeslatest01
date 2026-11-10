@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../db';
+import { db, type KhaataAccount, type Khaata } from '../db';
 import { translations, type Language } from '../translations';
 import { Save, Download, Upload, Languages, Trash2, AlertTriangle, BadgeDollarSign, History, ShoppingBag, Palette, Sparkles, LayoutGrid, Coins, Check } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
@@ -237,9 +237,12 @@ export default function Settings({
         goldPurchases, 
         expenses, 
         khaataAccounts, 
-        khaata 
+        khaata,
+        // Compatibility aliases for older versions or external imports
+        khataAccounts: khaataAccounts,
+        khata: khaata
       };
-      const fileName = `saif_jewellers_backup_${new Date().toISOString().split('T')[0]}.json`;
+      const fileName = `nafees_jewellers_backup_${new Date().toISOString().split('T')[0]}.json`;
       const jsonString = JSON.stringify(data);
 
       if (Capacitor.isNativePlatform()) {
@@ -284,33 +287,308 @@ export default function Settings({
         const reader = new FileReader();
         reader.onload = async (event) => {
           try {
-            const data = JSON.parse(event.target?.result as string);
-            await db.sales.clear();
-            await db.orders.clear();
-            await db.karigars.clear();
-            await db.repairs.clear();
-            await db.stock.clear();
-            await db.settings.clear();
-            await db.goldPurchases.clear();
-            await db.expenses.clear();
-            await db.khaataAccounts.clear();
-            await db.khaata.clear();
+            const rawContent = event.target?.result as string;
+            const data = JSON.parse(rawContent);
 
-            if (data.sales && data.sales.length > 0) await db.sales.bulkAdd(data.sales);
-            if (data.orders && data.orders.length > 0) await db.orders.bulkAdd(data.orders);
-            if (data.karigars && data.karigars.length > 0) await db.karigars.bulkAdd(data.karigars);
-            if (data.repairs && data.repairs.length > 0) await db.repairs.bulkAdd(data.repairs);
-            if (data.stock && data.stock.length > 0) await db.stock.bulkAdd(data.stock);
-            if (data.settings && data.settings.length > 0) await db.settings.bulkAdd(data.settings);
-            if (data.goldPurchases && data.goldPurchases.length > 0) await db.goldPurchases.bulkAdd(data.goldPurchases);
-            if (data.expenses && data.expenses.length > 0) await db.expenses.bulkAdd(data.expenses);
-            if (data.khaataAccounts && data.khaataAccounts.length > 0) await db.khaataAccounts.bulkAdd(data.khaataAccounts);
-            if (data.khaata && data.khaata.length > 0) await db.khaata.bulkAdd(data.khaata);
+            if (!data || typeof data !== 'object') {
+              throw new Error('Invalid JSON format');
+            }
 
-            alert(lang === 'ur' ? 'ڈیٹا کامیابی سے بحال ہو گیا ہے' : 'Data restored successfully');
+            // Clear existing data cleanly before restore
+            await Promise.all([
+              db.sales.clear(),
+              db.orders.clear(),
+              db.karigars.clear(),
+              db.repairs.clear(),
+              db.stock.clear(),
+              db.settings.clear(),
+              db.goldPurchases.clear(),
+              db.expenses.clear(),
+              db.khaataAccounts.clear(),
+              db.khaata.clear()
+            ]);
+
+            // Helper to restore standard tables safely
+            const restoreTable = async (table: any, items: any[], tableName: string) => {
+              if (!Array.isArray(items) || items.length === 0) return;
+              try {
+                await table.bulkPut(items);
+              } catch (bulkErr) {
+                console.warn(`bulkPut failed for ${tableName}, falling back to put:`, bulkErr);
+                for (const item of items) {
+                  try {
+                    await table.put(item);
+                  } catch (itemErr) {
+                    console.error(`Error inserting into ${tableName}:`, itemErr, item);
+                  }
+                }
+              }
+            };
+
+            // Unnest root object in case backup JSON is wrapped in { data: ... } or { backup: ... } or { export: ... }
+            const root = data.data || data.backup || data.export || data.payload || data.db || data;
+
+            // 1. Standard tables
+            if (root.sales && root.sales.length > 0) await restoreTable(db.sales, root.sales, 'sales');
+            if (root.orders && root.orders.length > 0) await restoreTable(db.orders, root.orders, 'orders');
+            if (root.karigars && root.karigars.length > 0) await restoreTable(db.karigars, root.karigars, 'karigars');
+            if (root.repairs && root.repairs.length > 0) await restoreTable(db.repairs, root.repairs, 'repairs');
+            if (root.stock && root.stock.length > 0) await restoreTable(db.stock, root.stock, 'stock');
+            if (root.settings && root.settings.length > 0) await restoreTable(db.settings, root.settings, 'settings');
+
+            const purchases = root.goldPurchases || root.gold_purchases || root.purchases || [];
+            if (purchases.length > 0) await restoreTable(db.goldPurchases, purchases, 'goldPurchases');
+
+            if (root.expenses && root.expenses.length > 0) await restoreTable(db.expenses, root.expenses, 'expenses');
+
+            // 2. Comprehensive Khaata Section Restoration
+            // Inspect any naming variations: khaataAccounts, khataAccounts, accounts, khatas, etc.
+            const rawAccounts = 
+              root.khaataAccounts || 
+              root.khataAccounts || 
+              root.khaata_accounts || 
+              root.khata_accounts || 
+              root.khatas || 
+              root.khaatas || 
+              root.accounts || 
+              root.khaataAccount || 
+              root.khataAccount || 
+              root.khataList || 
+              root.khaataList || 
+              root.KhaataAccounts || 
+              root.KhataAccounts || 
+              root.customers || 
+              root.parties || 
+              [];
+
+            // Inspect any naming variations for transactions/entries: khaata, khata, entries, records, etc.
+            const rawEntries = 
+              root.khaata || 
+              root.khata || 
+              root.khaataRecords || 
+              root.khataRecords || 
+              root.khaata_records || 
+              root.khata_records || 
+              root.khaataEntries || 
+              root.khataEntries || 
+              root.khaata_entries || 
+              root.khata_entries || 
+              root.entries || 
+              root.records || 
+              root.transactions || 
+              root.Khaata || 
+              root.Khata || 
+              [];
+
+            const normalizedAccounts: KhaataAccount[] = [];
+            const normalizedEntries: Khaata[] = [];
+            const accountIdMap = new Map<any, number>();
+            let nextAccountId = 1;
+
+            // Robust helper to extract numbers from string/number inputs (e.g. "10.36g", "R 16", "11 R", 10.36)
+            const extractNum = (val: any): number => {
+              if (val === undefined || val === null || val === '') return 0;
+              if (typeof val === 'number') return isNaN(val) ? 0 : val;
+              const str = String(val).replace(/,/g, '.').replace(/[^0-9.-]/g, '');
+              const num = parseFloat(str);
+              return isNaN(num) ? 0 : num;
+            };
+
+            // Helper to extract string from multiple potential key names
+            const extractStr = (item: any, keys: string[]): string => {
+              if (!item || typeof item !== 'object') return '';
+              for (const k of keys) {
+                if (item[k] !== undefined && item[k] !== null && String(item[k]).trim() !== '') {
+                  return String(item[k]).trim();
+                }
+              }
+              return '';
+            };
+
+            // Helper to parse Khaata entry while preserving exact stored values
+            const parseKhaataEntry = (item: any, accId: number): Khaata => {
+              const entryId = item.id !== undefined && !isNaN(Number(item.id)) && Number(item.id) > 0 ? Number(item.id) : undefined;
+              const date = item.date || item.created_at || item.createdAt || new Date().toISOString().split('T')[0];
+              
+              const itemDetail = extractStr(item, [
+                'details', 'itemDetail', 'item_detail', 'ashia_tafseel', 'ashiaTafseel',
+                'ashia', 'itemsDetails', 'items_details', 'tafseel_ashia', 'tafseelAshia',
+                'description', 'particulars', 'item', 'tafsil', 'tafseel', 'n', 'title', 'name', 'notes', 'remark', 'remarks'
+              ]) || 'تفصیل';
+
+              const pakaye = extractNum(
+                item.pakaye ?? item.pakai ?? item.pakaye_wazan ?? item.pure ?? item.touch
+              );
+
+              const mixWazan = extractNum(
+                item.mixWeight ?? item.mixWazan ?? item.mix_weight ?? item.mix_wazan ?? 
+                item.mix ?? item.weight ?? item.wazan ?? item.grossWeight ?? item.gross_weight ?? item.totalWeight ?? item.total_weight ?? item.w
+              );
+
+              const kaatInRati = extractNum(
+                item.kaatRati ?? item.kaatInRati ?? item.kaat_rati ?? item.kaat_in_rati ?? 
+                item.kaat ?? item.rati ?? item.kaat_rati_mein ?? item.kaatRatiMein ?? item.deduction
+              );
+
+              // Extract raw pasaDia if present in any variation
+              let pasaDiaRaw = 
+                item.pasaDia ?? item.pasa_dia ?? item.dia ?? item.given ?? item.paid ?? 
+                item.pasaGiven ?? item.pasa_given ?? item.debit ?? item.namee ?? item.namme;
+
+              const pasaDia = extractNum(pasaDiaRaw);
+
+              // Extract raw itemPasa if present in any variation
+              let itemPasaRaw = 
+                item.pureWeight ?? item.pure_weight ?? item.itemPasa ?? item.item_pasa ?? 
+                item.pasaJama ?? item.pasa_jama ?? item.jama ?? item.credit ?? 
+                item.pureGold ?? item.pure_gold ?? item.pasaMade ?? item.pasa_made ?? item.pasaWazan ?? item.pasa_wazan;
+
+              let itemPasa: number;
+              if (itemPasaRaw !== undefined && itemPasaRaw !== null && itemPasaRaw !== '') {
+                itemPasa = extractNum(itemPasaRaw);
+              } else if (mixWazan > 0) {
+                itemPasa = parseFloat(((mixWazan / 96) * (96 - kaatInRati)).toFixed(3));
+              } else {
+                itemPasa = 0;
+              }
+
+              // Extract raw totalBaqaya if present in any variation
+              let totalBaqayaRaw = 
+                item.totalBaqaya ?? item.total_baqaya ?? item.baqaya ?? item.rem ?? 
+                item.balance ?? item.netBaqaya ?? item.net_baqaya ?? item.closingBalance ?? item.closing_balance;
+
+              let totalBaqaya: number;
+              if (totalBaqayaRaw !== undefined && totalBaqayaRaw !== null && totalBaqayaRaw !== '') {
+                totalBaqaya = extractNum(totalBaqayaRaw);
+              } else {
+                totalBaqaya = parseFloat((itemPasa - pasaDia).toFixed(3));
+              }
+
+              const img = item.img || item.image || item.photo || null;
+
+              return {
+                ...(entryId ? { id: entryId } : {}),
+                accountId: accId,
+                date,
+                details: itemDetail || 'تفصیل',
+                itemDetail: itemDetail || 'تفصیل',
+                type: item.type || 'give',
+                mixWeight: mixWazan,
+                mixWazan: mixWazan,
+                pakaye,
+                kaatRati: kaatInRati,
+                kaatInRati,
+                pureWeight: itemPasa,
+                itemPasa,
+                pasaDia,
+                totalBaqaya,
+                img,
+                ...(item.notes ? { notes: item.notes } : {}),
+                ...(item._syncId ? { _syncId: item._syncId } : {}),
+                ...(item._updatedAt ? { _updatedAt: item._updatedAt } : {})
+              };
+            };
+
+            // Process accounts from rawAccounts
+            if (Array.isArray(rawAccounts)) {
+              rawAccounts.forEach((acc: any) => {
+                if (!acc || typeof acc !== 'object') return;
+                
+                let accId: number;
+                if (acc.id !== undefined && !isNaN(Number(acc.id)) && Number(acc.id) > 0) {
+                  accId = Number(acc.id);
+                } else {
+                  accId = nextAccountId;
+                }
+                nextAccountId = Math.max(nextAccountId, accId + 1);
+
+                const name = String(acc.name || acc.accountName || acc.account_name || acc.customerName || acc.customer_name || acc.title || `اکاؤنٹ #${accId}`).trim();
+                const phone = String(acc.phone || acc.mobile || acc.contact || acc.phoneNumber || acc.phone_number || '').trim();
+                const createdAt = acc.createdAt || acc.created_at || acc.date || new Date().toISOString();
+
+                normalizedAccounts.push({
+                  id: accId,
+                  name,
+                  phone,
+                  createdAt,
+                  date: acc.date || createdAt,
+                  notes: acc.notes || '',
+                  ...(acc._syncId ? { _syncId: acc._syncId } : {}),
+                  ...(acc._updatedAt ? { _updatedAt: acc._updatedAt } : {})
+                });
+
+                accountIdMap.set(accId, accId);
+                accountIdMap.set(String(accId), accId);
+                if (name) accountIdMap.set(name.toLowerCase(), accId);
+
+                // Handle nested entries inside account object (e.g. acc.entries or acc.records or acc.khaata)
+                const nested = acc.entries || acc.records || acc.khaata || acc.khata || acc.items || acc.transactions || acc.history || acc.details;
+                if (Array.isArray(nested) && nested.length > 0) {
+                  nested.forEach((item: any) => {
+                    if (!item || typeof item !== 'object') return;
+                    normalizedEntries.push(parseKhaataEntry(item, accId));
+                  });
+                }
+              });
+            }
+
+            // Process entries from top-level entries array
+            if (Array.isArray(rawEntries)) {
+              rawEntries.forEach((item: any) => {
+                if (!item || typeof item !== 'object') return;
+
+                // Resolve which account this belongs to
+                let accId: number | undefined;
+                const rawAccId = item.accountId ?? item.account_id ?? item.accId ?? item.acc_id ?? item.customerId ?? item.customer_id;
+                if (rawAccId !== undefined && accountIdMap.has(rawAccId)) {
+                  accId = accountIdMap.get(rawAccId);
+                } else if (rawAccId !== undefined && accountIdMap.has(Number(rawAccId))) {
+                  accId = accountIdMap.get(Number(rawAccId));
+                } else if (rawAccId !== undefined && !isNaN(Number(rawAccId)) && Number(rawAccId) > 0) {
+                  accId = Number(rawAccId);
+                }
+
+                // If not found by ID, try finding by accountName or customerName
+                const accName = String(item.accountName || item.account_name || item.customerName || item.customer_name || item.name || '').trim();
+                if (!accId && accName && accountIdMap.has(accName.toLowerCase())) {
+                  accId = accountIdMap.get(accName.toLowerCase());
+                }
+
+                // If no account exists for this entry, create one automatically so data is never lost
+                if (!accId) {
+                  accId = nextAccountId++;
+                  const newAcc: KhaataAccount = {
+                    id: accId,
+                    name: accName || `اکاؤنٹ #${accId}`,
+                    phone: String(item.phone || item.mobile || ''),
+                    createdAt: item.date || new Date().toISOString()
+                  };
+                  normalizedAccounts.push(newAcc);
+                  accountIdMap.set(accId, accId);
+                  accountIdMap.set(String(accId), accId);
+                  if (newAcc.name) accountIdMap.set(newAcc.name.toLowerCase(), accId);
+                }
+
+                normalizedEntries.push(parseKhaataEntry(item, accId));
+              });
+            }
+
+            // Restore sanitized accounts and entries into Dexie
+            if (normalizedAccounts.length > 0) {
+              await restoreTable(db.khaataAccounts, normalizedAccounts, 'khaataAccounts');
+            }
+            if (normalizedEntries.length > 0) {
+              await restoreTable(db.khaata, normalizedEntries, 'khaata');
+            }
+
+            const restoreStatsUrdu = `ڈیٹا کامیابی سے بحال ہو گیا ہے! (${normalizedAccounts.length} کھاتہ جات اور ${normalizedEntries.length} اندراجات بحال ہوئے)`;
+            const restoreStatsEng = `Data restored successfully! (${normalizedAccounts.length} khaata accounts and ${normalizedEntries.length} entries restored)`;
+
+            alert(lang === 'ur' ? restoreStatsUrdu : restoreStatsEng);
             window.location.reload();
-          } catch (err) {
-            alert('Invalid backup file');
+          } catch (err: any) {
+            console.error('Restore error:', err);
+            alert((lang === 'ur' ? 'بیک اپ فائل درست نہیں ہے یا ڈیٹا بحال کرنے میں مسئلہ پیش آیا: ' : 'Invalid backup file or error restoring data: ') + (err?.message || ''));
           }
         };
         reader.readAsText(file);

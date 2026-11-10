@@ -1015,7 +1015,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
                   <td className="font-mono">{karigar.given}g</td>
                   <td className="font-mono">{karigar.rec}g</td>
                   <td className="font-mono">{karigar.kaat}g</td>
-                  <td className="font-bold font-mono" style={{ color: '#996515' }}>{karigar.net}g</td>
+                  <td className="font-bold font-mono" style={{ color: karigar.net <= 0 ? '#15803d' : '#996515' }}>
+                    {karigar.net <= 0 ? '0g (صاف / Clear)' : `${karigar.net}g`}
+                  </td>
                 </tr>
               </tbody>
             </table>

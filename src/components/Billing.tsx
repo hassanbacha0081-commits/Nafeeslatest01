@@ -614,9 +614,9 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         const val = Number(e.target.value);
                         setFormData({ ...formData, tolaRate: val, iRate: val ? Number((val / 12).toFixed(2)) : 0 });
                       }}
-                      className="w-full pl-6 pr-12 py-5 bg-sky-900 text-gold border-none rounded-2xl focus:ring-4 focus:ring-gold/20 outline-none transition-all text-2xl font-black shadow-inner tracking-widest"
+                      className="w-full pl-6 pr-12 py-5 bg-zinc-950 text-amber-300 border-2 border-amber-400 rounded-2xl focus:ring-4 focus:ring-amber-500/30 outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-amber-400/40"
                     />
-                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-bold text-zinc-500 text-xs">PKR</span>
+                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-amber-300 bg-zinc-900 px-2 py-1 rounded-lg border border-amber-400/50 text-xs">PKR</span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -630,9 +630,9 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         const val = Number(e.target.value);
                         setFormData({ ...formData, iRate: val, tolaRate: val ? Number((val * 12).toFixed(2)) : 0 });
                       }}
-                      className="w-full pl-6 pr-12 py-5 bg-sky-900 text-gold border-none rounded-2xl focus:ring-4 focus:ring-gold/20 outline-none transition-all text-2xl font-black shadow-inner tracking-widest"
+                      className="w-full pl-6 pr-12 py-5 bg-zinc-950 text-amber-300 border-2 border-amber-400 rounded-2xl focus:ring-4 focus:ring-amber-500/30 outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-amber-400/40"
                     />
-                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-bold text-zinc-500 text-xs">PKR</span>
+                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-amber-300 bg-zinc-900 px-2 py-1 rounded-lg border border-amber-400/50 text-xs">PKR</span>
                   </div>
                 </div>
               </div>

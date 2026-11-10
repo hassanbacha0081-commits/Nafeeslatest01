@@ -20,12 +20,15 @@ interface BillingProps {
 }
 
 import ImageLightbox from './ImageLightbox';
+import ContactPickerModal from './ContactPickerModal';
 
 export default function Billing({ lang, editingSale, setEditingSale }: BillingProps) {
   const t = translations[lang];
   const [billItems, setBillItems] = useState<SalesItem[]>([]);
   const [lastImg, setLastImg] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     cName: '',
@@ -39,7 +42,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     iMazdori: 0,
     oTotalWt: 0,
     oNetWt: 0,
-    recAmt: 0
+    recAmt: 0,
+    discount: 0
   });
 
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -308,7 +312,25 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
   };
 
   const getRemainingAmount = () => {
-    return getGrandTotal() - formData.recAmt;
+    return Math.round(getGrandTotal() - (formData.recAmt || 0) - (formData.discount || 0));
+  };
+
+  const exportVCard = () => {
+    const name = formData.cName || 'Customer';
+    const phone = formData.cPhone || '';
+    if (!phone) {
+      alert(lang === 'ur' ? 'پہلے فون نمبر درج کریں' : 'Please enter phone number first');
+      return;
+    }
+    const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phone}\nEND:VCARD`;
+    const blob = new Blob([vcard], { type: 'text/vcard;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${name.replace(/[^a-zA-Z0-9]/g, '_')}.vcf`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -324,15 +346,38 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     }
   };
 
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const telMatch = text.match(/TEL:(.*)/);
+      if (fnMatch || telMatch) {
+        setFormData(prev => ({
+          ...prev,
+          cName: fnMatch ? fnMatch[1].trim() : prev.cName,
+          cPhone: telMatch ? telMatch[1].trim() : prev.cPhone
+        }));
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleSaveAndPrint = async () => {
     const total = getGrandTotal();
+    const rec = formData.recAmt || 0;
+    const disc = formData.discount || 0;
+    const rem = Math.round(total - rec - disc);
     const data: Sale = {
       name: formData.cName || (lang === 'ur' ? "کسٹمر" : "Customer"),
       phone: formData.cPhone || "-",
       items: [...billItems],
       total: total,
-      rec: formData.recAmt,
-      rem: total - formData.recAmt,
+      rec: rec,
+      discount: disc,
+      rem: rem,
       date: editingSale ? editingSale.date : formatDate(new Date(), 'ur-PK')
     };
 
@@ -590,14 +635,47 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
               </div>
               <div className="space-y-2">
                 <label className="text-sm font-bold text-zinc-700 ml-1 urdu-text">{t.phoneNumber}</label>
-                <input
-                  type="text"
-                  placeholder="03xx xxxxxxx"
-                  value={formData.cPhone}
-                  onChange={e => setFormData({ ...formData, cPhone: e.target.value })}
-                  className="w-full px-5 py-4 bg-sky-50 border border-sky-100 rounded-2xl focus:ring-2 focus:ring-gold focus:bg-white outline-none transition-all text-lg font-mono font-bold text-right"
-                  dir="ltr"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="03xx xxxxxxx"
+                    value={formData.cPhone}
+                    onChange={e => setFormData({ ...formData, cPhone: e.target.value })}
+                    className="flex-1 px-5 py-4 bg-sky-50 border border-sky-100 rounded-2xl focus:ring-2 focus:ring-gold focus:bg-white outline-none transition-all text-lg font-mono font-bold text-right"
+                    dir="ltr"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsContactPickerOpen(true)}
+                    className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                    title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
+                  >
+                    <Users size={18} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportVCard}
+                    className="px-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                    title={lang === 'ur' ? 'بطور VCF رابطہ محفوظ کریں' : 'Save Contact as VCF'}
+                  >
+                    <Download size={18} />
+                  </button>
+                  <input
+                    type="file"
+                    accept=".vcf"
+                    onChange={handleVcfUpload}
+                    ref={vcfInputRef}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => vcfInputRef.current?.click()}
+                    className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                    title={lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
               </div>
             </div>
             
@@ -614,9 +692,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         const val = Number(e.target.value);
                         setFormData({ ...formData, tolaRate: val, iRate: val ? Number((val / 12).toFixed(2)) : 0 });
                       }}
-                      className="w-full pl-6 pr-12 py-5 bg-zinc-950 text-amber-300 border-2 border-amber-400 rounded-2xl focus:ring-4 focus:ring-amber-500/30 outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-amber-400/40"
+                      className="w-full px-6 py-5 bg-sky-50 text-black border border-sky-200 rounded-2xl focus:ring-2 focus:ring-gold focus:bg-white outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-zinc-400"
                     />
-                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-amber-300 bg-zinc-900 px-2 py-1 rounded-lg border border-amber-400/50 text-xs">PKR</span>
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -630,9 +707,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         const val = Number(e.target.value);
                         setFormData({ ...formData, iRate: val, tolaRate: val ? Number((val * 12).toFixed(2)) : 0 });
                       }}
-                      className="w-full pl-6 pr-12 py-5 bg-zinc-950 text-amber-300 border-2 border-amber-400 rounded-2xl focus:ring-4 focus:ring-amber-500/30 outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-amber-400/40"
+                      className="w-full px-6 py-5 bg-sky-50 text-black border border-sky-200 rounded-2xl focus:ring-2 focus:ring-gold focus:bg-white outline-none transition-all text-2xl font-black shadow-inner tracking-widest placeholder-zinc-400"
                     />
-                    <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-amber-300 bg-zinc-900 px-2 py-1 rounded-lg border border-amber-400/50 text-xs">PKR</span>
                   </div>
                 </div>
               </div>
@@ -851,9 +927,6 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         </div>
                         <div className="flex justify-between items-center mt-2">
                           <span className="text-[10px] font-mono font-bold text-zinc-500 bg-white px-2 py-0.5 rounded border border-sky-100">{item.w}g @ {item.r.toLocaleString()}</span>
-                          <span className={`font-black text-sm ${item.t < 0 ? 'text-red-600' : 'text-zinc-900'}`}>
-                            {item.t < 0 ? '-' : ''}Rs. {Math.abs(item.t).toLocaleString()}
-                          </span>
                         </div>
                       </div>
                     </div>
@@ -936,6 +1009,20 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                   </span>
                 </div>
               </div>
+
+              <div className="flex justify-between items-center bg-sky-50 p-4 rounded-2xl border border-sky-100">
+                <span className="text-zinc-500 font-bold urdu-text">{lang === 'ur' ? 'ڈسکاؤنٹ (Discount)' : 'Discount'}</span>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={formData.discount || ''}
+                    onChange={e => setFormData({ ...formData, discount: Number(e.target.value) })}
+                    className="w-32 px-4 py-2 bg-white border border-sky-100 rounded-xl text-right font-black text-zinc-900 focus:ring-2 focus:ring-gold outline-none"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
               <div className="flex justify-between items-center p-6 bg-gold text-black rounded-3xl shadow-xl shadow-gold/20 border-2 border-white/20">
                 <span className="font-black urdu-text text-lg uppercase tracking-tight">{t.remainingAmount}</span>
                 <span className="text-3xl font-black text-black tracking-tighter">Rs. {getRemainingAmount().toLocaleString()}</span>
@@ -960,6 +1047,18 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       {lightboxImage && (
         <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} title={lang === 'ur' ? 'بل آئٹم تصویر' : 'Invoice Item Image'} />
       )}
+      <ContactPickerModal
+        isOpen={isContactPickerOpen}
+        onClose={() => setIsContactPickerOpen(false)}
+        onSelect={(contact) => {
+          setFormData(prev => ({
+            ...prev,
+            cName: contact.name,
+            cPhone: contact.phone
+          }));
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

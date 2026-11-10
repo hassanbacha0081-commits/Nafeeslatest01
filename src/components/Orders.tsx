@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Order, type OrderPayment } from '../db';
 import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
-import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, X, Download, AlertCircle, Image as ImageIcon, Scale, Sparkles, Hammer, Eye, EyeOff, Filter, Search } from 'lucide-react';
+import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, X, Download, AlertCircle, Image as ImageIcon, Scale, Sparkles, Hammer, Eye, EyeOff, Filter, Search, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
@@ -24,6 +24,7 @@ interface OrdersProps {
 
 import ImageLightbox from './ImageLightbox';
 import WhatsAppShareModal, { type WhatsAppShareData } from './WhatsAppShareModal';
+import ContactPickerModal from './ContactPickerModal';
 
 export default function Orders({ lang }: OrdersProps) {
   const t = translations[lang];
@@ -35,6 +36,7 @@ export default function Orders({ lang }: OrdersProps) {
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showSummary, setShowSummary] = useState(true);
   const [showOrderStatusOnBill, setShowOrderStatusOnBill] = useState(true);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -49,6 +51,7 @@ export default function Orders({ lang }: OrdersProps) {
     readyWt: '',
     total: 0,
     recAmt: 0,
+    discount: 0,
     status: 'pending',
     makingCharges: '',
     weightPolish: '',
@@ -234,11 +237,12 @@ export default function Orders({ lang }: OrdersProps) {
   const updateRem = () => {
     const total = (Number(formData.goldAmount) || 0) + (Number(formData.mazdori) || 0);
     const oldGoldMinus = Number(formData.oldGoldMinus) || 0;
+    const discount = Number(formData.discount) || 0;
     if (editId) {
       const otherPaymentsSum = editingPayments.slice(1).reduce((sum, p) => sum + p.amt, 0);
-      return total - oldGoldMinus - (Number(formData.recAmt) || 0) - otherPaymentsSum;
+      return Math.round(total - oldGoldMinus - discount - (Number(formData.recAmt) || 0) - otherPaymentsSum);
     } else {
-      return total - oldGoldMinus - (Number(formData.recAmt) || 0);
+      return Math.round(total - oldGoldMinus - discount - (Number(formData.recAmt) || 0));
     }
   };
 
@@ -268,8 +272,9 @@ export default function Orders({ lang }: OrdersProps) {
     const goldAmount = Number(formData.goldAmount) || 0;
     const mazdori = Number(formData.mazdori) || 0;
     const oldGoldMinus = Number(formData.oldGoldMinus) || 0;
+    const discount = Number(formData.discount) || 0;
     const calculatedTotal = goldAmount + mazdori;
-    const rem = calculatedTotal - oldGoldMinus - paymentsSum;
+    const rem = Math.round(calculatedTotal - oldGoldMinus - discount - paymentsSum);
 
     const order: Order = {
       name: formData.name,
@@ -285,6 +290,7 @@ export default function Orders({ lang }: OrdersProps) {
       total: calculatedTotal,
       payments: payments,
       rem: rem,
+      discount: discount,
       status: formData.status,
       img: currentImg,
       makingCharges: formData.makingCharges ? parseFloat(Number(formData.makingCharges).toFixed(2)).toString() : '',
@@ -690,12 +696,23 @@ export default function Orders({ lang }: OrdersProps) {
             </div>
             <div className="space-y-1">
               <label className="text-xs text-zinc-500 urdu-text">فون نمبر:</label>
-              <input 
-                type="number" 
-                value={formData.phone}
-                onChange={e => setFormData({ ...formData, phone: e.target.value })}
-                className="w-full p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black"
-              />
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={formData.phone}
+                  onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                  className="flex-1 p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-mono"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsContactPickerOpen(true)}
+                  className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                  title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
+                >
+                  <Users size={18} />
+                </button>
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs text-zinc-500 urdu-text">تاریخ بکنگ:</label>
@@ -986,6 +1003,16 @@ export default function Orders({ lang }: OrdersProps) {
                 onChange={e => setFormData({ ...formData, recAmt: Number(e.target.value) || 0 })}
                 className="w-full p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold"
                 placeholder="e.g. 10,000"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-xs text-zinc-500 urdu-text">{lang === 'ur' ? 'ڈسکاؤنٹ (Discount):' : 'Discount:'}</label>
+              <input 
+                type="number" 
+                value={formData.discount || ''}
+                onChange={e => setFormData({ ...formData, discount: Number(e.target.value) || 0 })}
+                className="w-full p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold"
+                placeholder="e.g. 500"
               />
             </div>
           </div>
@@ -1456,6 +1483,19 @@ export default function Orders({ lang }: OrdersProps) {
           lang={lang}
         />
       )}
+
+      <ContactPickerModal
+        isOpen={isContactPickerOpen}
+        onClose={() => setIsContactPickerOpen(false)}
+        onSelect={(contact) => {
+          setFormData(prev => ({
+            ...prev,
+            name: contact.name,
+            phone: contact.phone
+          }));
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

@@ -273,7 +273,7 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-extrabold text-amber-300 mb-1.5 urdu-text tracking-wide">
-                  {isUrdu ? '24 قیراط سونے کا ریٹ فی تولہ (PKR)' : '24K Gold Rate Per Tola (PKR)'}
+                  {isUrdu ? '24 قیراط سونے کا ریٹ فی تولہ' : '24K Gold Rate Per Tola'}
                 </label>
                 <div className="relative">
                   <input
@@ -284,13 +284,12 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
                     className="w-full bg-black border-2 border-amber-400 text-amber-300 placeholder-amber-400/50 text-2xl font-black font-mono focus:outline-none focus:ring-4 focus:ring-amber-500/40 focus:border-amber-300 shadow-xl px-4 py-3.5 rounded-xl transition-all"
                     autoFocus
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-amber-300 bg-zinc-900/90 px-2.5 py-1 rounded-lg border border-amber-400/60 shadow-sm">PKR</span>
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-extrabold text-slate-200 mb-1.5 urdu-text tracking-wide">
-                  {isUrdu ? 'چاندی کا ریٹ فی تولہ (PKR)' : 'Silver Rate Per Tola (PKR)'}
+                  {isUrdu ? 'چاندی کا ریٹ فی تولہ' : 'Silver Rate Per Tola'}
                 </label>
                 <div className="relative">
                   <input
@@ -300,7 +299,6 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
                     placeholder="e.g. 3250"
                     className="w-full bg-black border-2 border-slate-400 text-white placeholder-slate-400/50 text-xl font-black font-mono focus:outline-none focus:ring-4 focus:ring-slate-400/40 focus:border-white shadow-xl px-4 py-3 rounded-xl transition-all"
                   />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-black text-slate-200 bg-zinc-900/90 px-2.5 py-1 rounded-lg border border-slate-400/60 shadow-sm">PKR</span>
                 </div>
               </div>
 

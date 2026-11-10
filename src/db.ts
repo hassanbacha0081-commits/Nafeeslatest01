@@ -18,6 +18,7 @@ export interface Sale {
   items: SalesItem[];
   total: number;
   rec: number;
+  discount?: number;
   rem: number;
   date: string;
 }
@@ -51,6 +52,7 @@ export interface Order {
   goldAmount?: number;
   mazdori?: number;
   oldGoldMinus?: number;
+  discount?: number;
 }
 
 export interface KarigarRecord {
@@ -149,6 +151,12 @@ export interface Setting {
   value: any;
 }
 
+export interface ContactItem {
+  id?: number;
+  name: string;
+  phone: string;
+}
+
 export class MyDatabase extends Dexie {
   sales!: Table<Sale>;
   orders!: Table<Order>;
@@ -160,6 +168,7 @@ export class MyDatabase extends Dexie {
   expenses!: Table<Expense>;
   khaataAccounts!: Table<KhaataAccount>;
   khaata!: Table<KhaataEntry>;
+  contacts!: Table<ContactItem>;
 
   get khaataEntries(): Table<KhaataEntry> {
     return this.khaata;
@@ -167,7 +176,7 @@ export class MyDatabase extends Dexie {
 
   constructor() {
     super('NafeesERP_V58_Final');
-    this.version(8).stores({
+    this.version(9).stores({
       sales: '++id, name, phone, date',
       orders: '++id, name, phone, status, due, karigar',
       karigars: '++id, name, phone, date',
@@ -177,7 +186,8 @@ export class MyDatabase extends Dexie {
       goldPurchases: '++id, name, phone, date',
       expenses: '++id, category, date',
       khaataAccounts: '++id, name',
-      khaata: '++id, accountId, date'
+      khaata: '++id, accountId, date',
+      contacts: '++id, name, phone'
     });
   }
 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db';
 import { type Language } from '../translations';
-import { X, Search, UserCheck } from 'lucide-react';
+import { X, Search, UserCheck, Upload } from 'lucide-react';
 
 interface ContactPickerModalProps {
   isOpen: boolean;
@@ -20,9 +20,15 @@ export default function ContactPickerModal({ isOpen, onClose, onSelect, lang }: 
     const orders = await db.orders.toArray();
     const karigars = await db.karigars.toArray();
     const purchases = await db.goldPurchases.toArray();
+    const savedContacts = await db.contacts?.toArray() || [];
 
     const contactMap = new Map<string, { name: string; phone: string }>();
 
+    savedContacts.forEach(c => {
+      if (c.phone && !contactMap.has(c.phone)) {
+        contactMap.set(c.phone, { name: c.name, phone: c.phone });
+      }
+    });
     sales.forEach(s => {
       if (s.name && s.phone && !contactMap.has(s.phone)) {
         contactMap.set(s.phone, { name: s.name, phone: s.phone });
@@ -47,6 +53,50 @@ export default function ContactPickerModal({ isOpen, onClose, onSelect, lang }: 
     return Array.from(contactMap.values());
   }, [isOpen]);
 
+  const handleVcfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const text = event.target?.result as string;
+        const vcards = text.split('BEGIN:VCARD');
+        let count = 0;
+        for (const vcard of vcards) {
+          if (!vcard.includes('FN:') && !vcard.includes('N:') && !vcard.includes('TEL:')) continue;
+          
+          let name = 'Contact';
+          let phone = '';
+
+          const lines = vcard.split(/\r?\n/);
+          for (const line of lines) {
+            if (line.startsWith('FN:')) {
+              name = line.replace('FN:', '').trim();
+            } else if (line.startsWith('N:') && name === 'Contact') {
+              const parts = line.replace('N:', '').split(';');
+              name = parts.filter(Boolean).join(' ').trim() || 'Contact';
+            } else if (line.startsWith('TEL')) {
+              const phoneVal = line.split(':')[1];
+              if (phoneVal) phone = phoneVal.trim();
+            }
+          }
+
+          if (phone) {
+            await db.contacts.put({ name, phone });
+            count++;
+          }
+        }
+        alert(lang === 'ur' ? `${count} رابطے کامیابی سے امپورٹ ہو گئے!` : `${count} contacts imported successfully!`);
+        setSearchTerm(prev => prev + ' ');
+        setTimeout(() => setSearchTerm(prev => prev.trim()), 50);
+      } catch (err) {
+        console.error('VCF Import error:', err);
+        alert(lang === 'ur' ? 'VCF فائل پڑھنے میں خرابی پیش آئی' : 'Error parsing VCF file');
+      }
+    };
+    reader.readAsText(file);
+  };
+
   if (!isOpen) return null;
 
   const filteredContacts = contacts?.filter(c => 
@@ -67,7 +117,25 @@ export default function ContactPickerModal({ isOpen, onClose, onSelect, lang }: 
           </button>
         </div>
 
-        <div className="p-4 border-b bg-sky-50">
+        <div className="p-4 border-b bg-sky-50 flex flex-col gap-3">
+          <div className="flex justify-between items-center">
+            <input
+              type="file"
+              accept=".vcf,text/vcard"
+              onChange={handleVcfUpload}
+              className="hidden"
+              id="vcfUploadInputModal"
+            />
+            <label
+              htmlFor="vcfUploadInputModal"
+              className="px-4 py-2 bg-gold/20 hover:bg-gold/30 text-gold-dark border border-gold/40 rounded-xl text-xs font-bold cursor-pointer flex items-center gap-2 transition-all urdu-text shadow-xs"
+            >
+              <Upload size={14} />
+              <span>{lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}</span>
+            </label>
+            <span className="text-[11px] text-zinc-500 font-mono">(.vcf contacts)</span>
+          </div>
+
           <div className="relative">
             <input
               type="text"

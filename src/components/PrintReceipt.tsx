@@ -530,13 +530,12 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           <table className="receipt-table" style={{ tableLayout: 'fixed', width: '100%' }}>
             <thead>
               <tr style={{ background: '#996515' }}>
-                <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white' }}>تفصیل</th>
-                <th className="font-nastaliq" style={{ width: '8%', background: '#996515', color: 'white' }}>تعداد</th>
-                <th className="font-nastaliq" style={{ width: '12%', background: '#996515', color: 'white' }}>وزن</th>
-                <th className="font-nastaliq" style={{ width: '10%', background: '#996515', color: 'white' }}>پالش</th>
-                <th className="font-nastaliq" style={{ width: '14%', background: '#996515', color: 'white' }}>کل وزن</th>
-                <th className="font-nastaliq" style={{ width: '18%', background: '#996515', color: 'white' }}>کل قیمت</th>
-                <th className="font-nastaliq" style={{ width: '18%', background: '#996515', color: 'white' }}>تصویر</th>
+                <th className="font-nastaliq" style={{ width: '25%', background: '#996515', color: 'white' }}>تفصیل</th>
+                <th className="font-nastaliq" style={{ width: '10%', background: '#996515', color: 'white' }}>تعداد</th>
+                <th className="font-nastaliq" style={{ width: '15%', background: '#996515', color: 'white' }}>وزن</th>
+                <th className="font-nastaliq" style={{ width: '15%', background: '#996515', color: 'white' }}>پالش</th>
+                <th className="font-nastaliq" style={{ width: '15%', background: '#996515', color: 'white' }}>کل وزن</th>
+                <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white' }}>تصویر</th>
               </tr>
             </thead>
             <tbody>
@@ -547,13 +546,12 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
                   <td className="font-mono font-bold">{parseFloat(Number(item.w).toFixed(2))}g</td>
                   <td className="font-mono">{parseFloat(Number(item.mk).toFixed(2))}g</td>
                   <td className="font-mono font-bold">{parseFloat(Number(item.w + item.mk).toFixed(2))}g</td>
-                  <td className="font-bold font-mono">{Math.round(item.t).toLocaleString()}</td>
                   <td style={{ padding: '4px', verticalAlign: 'middle' }}>
                     {item.img ? (
                       <img 
                         src={item.img} 
                         alt="" 
-                        style={{ height: '102px', maxHeight: '102px', width: 'auto', maxWidth: '100%', objectFit: 'contain', margin: '0 auto' }} 
+                        style={{ height: '80px', maxHeight: '80px', width: 'auto', maxWidth: '100%', objectFit: 'contain', margin: '0 auto' }} 
                         className="rounded border border-zinc-200 shadow-sm"
                       />
                     ) : (
@@ -594,6 +592,12 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
                   <th className="font-nastaliq" style={{ padding: '3px 8px' }}>وصول شدہ رقم</th>
                   <td className="font-mono" style={{ padding: '3px 8px' }}>{sale.rec.toLocaleString()}</td>
                 </tr>
+                {sale.discount !== undefined && sale.discount > 0 && (
+                  <tr className="text-amber-700">
+                    <th className="font-nastaliq" style={{ padding: '3px 8px' }}>ڈسکاؤنٹ</th>
+                    <td className="font-mono" style={{ padding: '3px 8px' }}>{sale.discount.toLocaleString()}</td>
+                  </tr>
+                )}
                 <tr className="final-total-row">
                   <th className="font-nastaliq font-black">صاف بقایا</th>
                   <td className="font-black font-mono">{sale.rem.toLocaleString()}</td>
@@ -719,23 +723,23 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
 
           <div className="mt-2">
             <h4 className="font-bold mb-1.5 text-sm font-nastaliq text-right text-gold">وزن کی تفصیل:</h4>
-            <table className="receipt-table" style={{ tableLayout: 'fixed', width: '100%', marginBottom: '14px' }}>
+            <table className="receipt-table" style={{ tableLayout: 'fixed', width: '100%', marginBottom: '14px', textAlign: 'center' }}>
               <thead>
                 <tr style={{ background: '#996515' }}>
-                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px' }}>پرانا وزن</th>
-                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px' }}>وزن</th>
-                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px' }}>پالش</th>
-                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px' }}>ٹوٹل وزن</th>
-                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px' }}>اضافی وزن</th>
+                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px', textAlign: 'center' }}>پرانا وزن</th>
+                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px', textAlign: 'center' }}>وزن</th>
+                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px', textAlign: 'center' }}>پالش</th>
+                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px', textAlign: 'center' }}>ٹوٹل وزن</th>
+                  <th className="font-nastaliq" style={{ width: '20%', background: '#996515', color: 'white', padding: '8px', fontSize: '15px', textAlign: 'center' }}>اضافی وزن</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px' }}>{order.oldWt ? `${parseFloat(Number(order.oldWt).toFixed(2))}g` : '-'}</td>
-                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px' }}>{order.readyWt ? `${parseFloat(Number(order.readyWt).toFixed(2))}g` : '-'}</td>
-                  <td className="font-bold font-nastaliq text-center" style={{ padding: '7px', fontSize: '15px' }}>{order.makingCharges || '-'}</td>
-                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px' }}>{order.totalWt ? `${parseFloat(Number(order.totalWt).toFixed(2))}g` : '-'}</td>
-                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px' }}>{order.izafiWt ? `${parseFloat(Number(order.izafiWt).toFixed(2))}g` : '-'}</td>
+                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px', textAlign: 'center' }}>{order.oldWt ? `${parseFloat(Number(order.oldWt).toFixed(2))}g` : '-'}</td>
+                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px', textAlign: 'center' }}>{order.readyWt ? `${parseFloat(Number(order.readyWt).toFixed(2))}g` : '-'}</td>
+                  <td className="font-bold font-nastaliq text-center" style={{ padding: '7px', fontSize: '15px', textAlign: 'center' }}>{order.makingCharges || '-'}</td>
+                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px', textAlign: 'center' }}>{order.totalWt ? `${parseFloat(Number(order.totalWt).toFixed(2))}g` : '-'}</td>
+                  <td className="font-mono font-bold text-center" style={{ padding: '7px', fontSize: '15px', textAlign: 'center' }}>{order.izafiWt ? `${parseFloat(Number(order.izafiWt).toFixed(2))}g` : '-'}</td>
                 </tr>
               </tbody>
             </table>

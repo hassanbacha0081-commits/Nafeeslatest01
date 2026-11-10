@@ -37,6 +37,7 @@ export default function Orders({ lang }: OrdersProps) {
   const [showSummary, setShowSummary] = useState(true);
   const [showOrderStatusOnBill, setShowOrderStatusOnBill] = useState(true);
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -257,6 +258,25 @@ export default function Orders({ lang }: OrdersProps) {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const telMatch = text.match(/TEL:(.*)/);
+      if (fnMatch || telMatch) {
+        setFormData(prev => ({
+          ...prev,
+          name: fnMatch ? fnMatch[1].trim() : prev.name,
+          phone: telMatch ? telMatch[1].trim() : prev.phone
+        }));
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSave = async () => {
@@ -711,6 +731,21 @@ export default function Orders({ lang }: OrdersProps) {
                   title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
                 >
                   <Users size={18} />
+                </button>
+                <input
+                  type="file"
+                  accept=".vcf"
+                  onChange={handleVcfUpload}
+                  ref={vcfInputRef}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => vcfInputRef.current?.click()}
+                  className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                  title={lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+                >
+                  <Plus size={18} />
                 </button>
               </div>
             </div>

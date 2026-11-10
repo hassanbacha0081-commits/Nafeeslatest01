@@ -607,14 +607,7 @@ export default function App() {
       {/* Main App Area */}
       <main className="flex-1 p-4 lg:p-8 mt-16 lg:mt-0 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
-          {/* Top Live Sarafa Market Bullion Board */}
-          {showSarafaTicker && (
-            <SarafaTicker 
-              baseRate={goldRate} 
-              lang={lang} 
-              onRateChange={(newRate) => setGoldRate(newRate)} 
-            />
-          )}
+
 
           {/* Active Module */}
           <AnimatePresence mode="wait">

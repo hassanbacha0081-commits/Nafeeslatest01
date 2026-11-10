@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { db, type GoldPurchase } from '../db';
 import { translations, type Language } from '../translations';
-import { Save, Printer, Camera, RotateCcw, Image as ImageIcon } from 'lucide-react';
+import { Save, Printer, Camera, RotateCcw, Image as ImageIcon, Users, Plus } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { PrintReceipt } from './PrintReceipt';
 import html2canvas from 'html2canvas-pro';
@@ -16,6 +16,7 @@ interface PurchasesProps {
 }
 
 import ImageLightbox from './ImageLightbox';
+import ContactPickerModal from './ContactPickerModal';
 
 export default function Purchases({ lang }: PurchasesProps) {
   const t = translations[lang];
@@ -39,6 +40,8 @@ export default function Purchases({ lang }: PurchasesProps) {
   const componentRef = useRef<HTMLDivElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
 
   // Persistence to handle page reloads during image capture on mobile
   useEffect(() => {
@@ -155,6 +158,22 @@ export default function Purchases({ lang }: PurchasesProps) {
     }
   };
 
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const telMatch = text.match(/TEL:(.*)/);
+      if (fnMatch || telMatch) {
+        setName(fnMatch ? fnMatch[1].trim() : name);
+        setPhone(telMatch ? telMatch[1].trim() : phone);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const calculateTotal = () => {
     const w = parseFloat(weight) || 0;
     const r = parseFloat(rate) || 0;
@@ -257,7 +276,43 @@ export default function Purchases({ lang }: PurchasesProps) {
                     dir="ltr"
                     className="w-full bg-sky-50 border border-sky-100 rounded-2xl px-5 py-4 text-right focus:ring-2 focus:ring-gold outline-none transition-all hover:bg-white focus:bg-white text-lg font-mono font-bold"
                   />
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      type="button"
+                      onClick={() => setIsContactPickerOpen(true)}
+                      className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                      title={isUrdu ? 'رابطہ منتخب کریں' : 'Select Contact'}
+                    >
+                      <Users size={18} />
+                    </button>
+                    <input
+                      type="file"
+                      accept=".vcf"
+                      onChange={handleVcfUpload}
+                      ref={vcfInputRef}
+                      className="hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => vcfInputRef.current?.click()}
+                      className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-2xl flex items-center justify-center transition-all cursor-pointer"
+                      title={isUrdu ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+                    >
+                      <Plus size={18} />
+                    </button>
+                  </div>
                 </div>
+                {isContactPickerOpen && (
+                  <ContactPickerModal
+                    isOpen={isContactPickerOpen}
+                    onClose={() => setIsContactPickerOpen(false)}
+                    onSelect={(contact) => {
+                      setName(contact.name);
+                      setPhone(contact.phone);
+                    }}
+                    lang={lang}
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

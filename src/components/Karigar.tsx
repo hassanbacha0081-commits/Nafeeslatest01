@@ -3,13 +3,14 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type KarigarRecord } from '../db';
 import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
-import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, Edit, Image as ImageIcon, AlertTriangle, X, Download, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, Edit, Image as ImageIcon, AlertTriangle, X, Download, AlertCircle, CheckCircle2, Users } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { PrintReceipt } from './PrintReceipt';
 import { ConfirmModal } from './ConfirmModal';
 import { MultiSelectInput } from './MultiSelectInput';
+import ContactPickerModal from './ContactPickerModal';
 import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
@@ -28,6 +29,8 @@ export default function Karigar({ lang }: KarigarProps) {
   const [editId, setEditId] = useState<number | null>(null);
   const [currentImg, setCurrentImg] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
 
   // Settlement / Clear balance state
   const [settleModalRecord, setSettleModalRecord] = useState<KarigarRecord | null>(null);
@@ -197,6 +200,25 @@ export default function Karigar({ lang }: KarigarProps) {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const telMatch = text.match(/TEL:(.*)/);
+      if (fnMatch || telMatch) {
+        setFormData(prev => ({
+          ...prev,
+          name: fnMatch ? fnMatch[1].trim() : prev.name,
+          phone: telMatch ? telMatch[1].trim() : prev.phone
+        }));
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSave = async () => {
@@ -392,12 +414,37 @@ export default function Karigar({ lang }: KarigarProps) {
             className="w-full p-4 bg-white border border-sky-200 rounded-xl outline-none focus:border-gold text-black text-center"
           />
           <input 
-            type="number" 
+            type="text" 
             placeholder={t.karigarLabels.mobile}
             value={formData.phone}
             onChange={e => setFormData({ ...formData, phone: e.target.value })}
             className="w-full p-4 bg-white border border-sky-200 rounded-xl outline-none focus:border-gold text-black text-center"
           />
+          <div className="flex gap-2 justify-center">
+            <button
+              type="button"
+              onClick={() => setIsContactPickerOpen(true)}
+              className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+              title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
+            >
+              <Users size={18} />
+            </button>
+            <input
+              type="file"
+              accept=".vcf"
+              onChange={handleVcfUpload}
+              ref={vcfInputRef}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => vcfInputRef.current?.click()}
+              className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+              title={lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+            >
+              <Plus size={18} />
+            </button>
+          </div>
           <MultiSelectInput 
             options={t.itemDetailsList}
             placeholder={t.karigarLabels.taskDetail}
@@ -740,6 +787,18 @@ export default function Karigar({ lang }: KarigarProps) {
       {lightboxImage && (
         <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} title={lang === 'ur' ? 'لیبارٹری رپورٹ' : 'Lab Report'} />
       )}
+      <ContactPickerModal
+        isOpen={isContactPickerOpen}
+        onClose={() => setIsContactPickerOpen(false)}
+        onSelect={(contact) => {
+          setFormData(prev => ({
+            ...prev,
+            name: contact.name,
+            phone: contact.phone
+          }));
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

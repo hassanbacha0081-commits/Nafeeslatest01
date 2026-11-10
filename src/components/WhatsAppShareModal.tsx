@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { X, MessageCircle, Download, Copy, Check, ExternalLink, Camera, Phone, User, FileText, Sparkles } from 'lucide-react';
+import React, { useState, useRef } from 'react';
+import { X, MessageCircle, Download, Copy, Check, ExternalLink, Camera, Phone, User, FileText, Sparkles, Users, Plus } from 'lucide-react';
+import ContactPickerModal from './ContactPickerModal';
 import { motion, AnimatePresence } from 'motion/react';
 import { shareImageViaWhatsApp, copyImageToClipboard, downloadImage } from '../lib/whatsappShare';
 import { formatWhatsAppUrl } from '../lib/utils';
@@ -29,6 +30,8 @@ export default function WhatsAppShareModal({ data, onClose, lang = 'ur' }: Whats
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'info' | 'error' } | null>(null);
   const [isSending, setIsSending] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
 
   const handleShare = async () => {
     setIsSending(true);
@@ -96,6 +99,20 @@ export default function WhatsAppShareModal({ data, onClose, lang = 'ur' }: Whats
         type: 'error'
       });
     }
+  };
+
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const telMatch = text.match(/TEL:(.*)/);
+      if (telMatch) {
+        setPhoneNumber(telMatch[1].trim());
+      }
+    };
+    reader.readAsText(file);
   };
 
   return (
@@ -186,7 +203,7 @@ export default function WhatsAppShareModal({ data, onClose, lang = 'ur' }: Whats
               <span>{isUrdu ? 'واٹس ایپ نمبر:' : 'WhatsApp Phone Number:'}</span>
               <span className="text-[10px] text-zinc-400 font-normal font-sans">0300... / 923...</span>
             </label>
-            <div className="relative">
+            <div className="relative flex gap-2">
               <input
                 type="text"
                 value={phoneNumber}
@@ -196,6 +213,29 @@ export default function WhatsAppShareModal({ data, onClose, lang = 'ur' }: Whats
                 className="w-full pl-9 pr-3 py-2.5 bg-white border border-sky-200 rounded-xl outline-none focus:border-green-600 text-sm font-mono text-zinc-800 shadow-xs"
               />
               <Phone size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
+              <button
+                type="button"
+                onClick={() => setIsContactPickerOpen(true)}
+                className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                title={isUrdu ? 'رابطہ منتخب کریں' : 'Select Contact'}
+              >
+                <Users size={18} />
+              </button>
+              <input
+                type="file"
+                accept=".vcf"
+                onChange={handleVcfUpload}
+                ref={vcfInputRef}
+                className="hidden"
+              />
+              <button
+                type="button"
+                onClick={() => vcfInputRef.current?.click()}
+                className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                title={isUrdu ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+              >
+                <Plus size={18} />
+              </button>
             </div>
           </div>
 
@@ -272,6 +312,15 @@ export default function WhatsAppShareModal({ data, onClose, lang = 'ur' }: Whats
           </div>
         </div>
       </motion.div>
+      {/* Contact Picker Modal */}
+      <ContactPickerModal
+        isOpen={isContactPickerOpen}
+        onClose={() => setIsContactPickerOpen(false)}
+        onSelect={(contact) => {
+          setPhoneNumber(contact.phone);
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

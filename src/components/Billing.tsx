@@ -246,14 +246,18 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     }
   }, [editingSale]);
 
-  const resetForm = () => {
+  const resetForm = async () => {
     setBillItems([]);
     setEditingSale(null);
+    
+    const rateSetting = await db.settings.get('goldRate');
+    const tola = (rateSetting?.value && Number(rateSetting.value) > 0) ? Number(rateSetting.value) : 0;
+    
     setFormData({
       cName: '',
       cPhone: '',
-      tolaRate: 0,
-      iRate: 0,
+      tolaRate: tola,
+      iRate: tola ? Number((tola / 12).toFixed(2)) : 0,
       iName: '',
       iWt: 0,
       iQty: 1,
@@ -261,7 +265,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       iMazdori: 0,
       oTotalWt: 0,
       oNetWt: 0,
-      recAmt: 0
+      recAmt: 0,
+      discount: 0
     });
   };
 
@@ -433,7 +438,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       setPdfUrl(null);
 
       // Reset the billing page form fields to blank
-      resetForm();
+      await resetForm();
 
       // Generate PDF for preview with an optimized 100ms delay to feel extremely responsive
       setTimeout(async () => {
@@ -519,11 +524,11 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
               </div>
               <button 
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setShowPrintPreview(false);
                   setPrintData(null);
                   setPdfUrl(null);
-                  resetForm();
+                  await resetForm();
                 }}
                 className="p-2 hover:bg-zinc-100 rounded-xl transition-all text-zinc-400 hover:text-red-500 border border-zinc-200"
               >
@@ -576,11 +581,11 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
 
                 <button 
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
                     setShowPrintPreview(false);
                     setPrintData(null);
                     setPdfUrl(null);
-                    resetForm();
+                    await resetForm();
                   }}
                   className="px-8 bg-zinc-100 text-zinc-600 font-bold py-4 rounded-xl hover:bg-zinc-200 transition-all urdu-text text-xl border border-zinc-200"
                 >
@@ -602,10 +607,10 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         </div>
         
         <div className="flex items-center gap-3">
-          <button
-            onClick={resetForm}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-sky-50 text-sky-600 hover:bg-sky-100 transition-all font-bold border border-sky-200 shadow-sm"
-          >
+            <button
+              onClick={async () => await resetForm()}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-sky-50 text-sky-600 hover:bg-sky-100 transition-all font-bold border border-sky-200 shadow-sm"
+            >
             <RotateCcw size={20} />
             <span className="urdu-text">{t.reset}</span>
           </button>

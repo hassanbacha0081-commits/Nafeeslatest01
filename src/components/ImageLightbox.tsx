@@ -1,0 +1,170 @@
+import React from 'react';
+import { X, ZoomIn, ZoomOut, RotateCw, Download, MessageCircle } from 'lucide-react';
+import { motion } from 'motion/react';
+import { Filesystem, Directory } from '@capacitor/filesystem';
+import { Share } from '@capacitor/share';
+import { Capacitor } from '@capacitor/core';
+import { shareImageViaWhatsApp } from '../lib/whatsappShare';
+import { APP_CONFIG } from '../config';
+
+interface ImageLightboxProps {
+  src: string;
+  onClose: () => void;
+  title?: string;
+  phone?: string;
+  customerName?: string;
+  caption?: string;
+  onOpenWhatsAppModal?: () => void;
+}
+
+export default function ImageLightbox({ 
+  src, 
+  onClose, 
+  title, 
+  phone, 
+  customerName, 
+  caption,
+  onOpenWhatsAppModal 
+}: ImageLightboxProps) {
+  const [scale, setScale] = React.useState(1);
+  const [rotation, setRotation] = React.useState(0);
+
+  // Close on Escape key press
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  const handleDownload = async () => {
+    if (!src) return;
+    
+    const filename = `Image_${Date.now()}`;
+    const extension = src.startsWith('data:image/') 
+      ? src.split(';')[0].split('/')[1]?.split('+')[0] || 'jpg' 
+      : 'jpg';
+
+    if (Capacitor.isNativePlatform()) {
+      try {
+        const base64Data = src.includes(',') ? src.split(',')[1] : src;
+        const savedFile = await Filesystem.writeFile({
+          path: `${filename}.${extension}`,
+          data: base64Data,
+          directory: Directory.Cache,
+        });
+
+        await Share.share({
+          title: 'Download Image',
+          url: savedFile.uri,
+        });
+      } catch (e) {
+        console.error('Error sharing image', e);
+        alert("Error sharing/saving image");
+      }
+    } else {
+      const link = document.createElement('a');
+      link.href = src;
+      link.download = `${filename}.${extension}`;
+      link.click();
+    }
+  };
+
+  const handleWhatsApp = async () => {
+    if (onOpenWhatsAppModal) {
+      onOpenWhatsAppModal();
+      return;
+    }
+    const cap = caption || `*${APP_CONFIG.shopNameUrdu}: تصویر*\n${customerName ? `گاہک: ${customerName}\n` : ''}شکریہ!`;
+    const res = await shareImageViaWhatsApp({
+      imageBase64: src,
+      phone: phone || '',
+      customerName: customerName,
+      caption: cap,
+      fileName: `jewellery_image_${Date.now()}`
+    });
+    if (res.message && res.method !== 'web_share' && res.method !== 'native_share') {
+      alert(res.message);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-black/95 p-4 backdrop-blur-md animate-in fade-in duration-200">
+      {/* Header */}
+      <div className="absolute top-0 inset-x-0 bg-black/60 backdrop-blur-md p-4 flex justify-between items-center text-white z-10">
+        <span className="font-bold text-sm tracking-wide font-sans">{title || 'Image Viewer | تصویر'}</span>
+        <div className="flex items-center gap-3">
+          <button 
+            type="button"
+            onClick={handleWhatsApp}
+            className="p-1.5 hover:bg-emerald-500/30 bg-emerald-600/30 rounded-lg transition-colors text-emerald-400 hover:text-emerald-300 font-bold flex items-center gap-1.5 border border-emerald-500/40"
+            title="واٹس ایپ پر بھیجیں (Send via WhatsApp)"
+          >
+            <MessageCircle size={18} />
+            <span className="text-xs hidden sm:inline urdu-text">واٹس ایپ (WhatsApp)</span>
+          </button>
+          <button 
+            type="button"
+            onClick={handleDownload}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gold hover:text-gold-light font-bold flex items-center gap-1"
+            title="Download / Save"
+          >
+            <Download size={20} />
+            <span className="text-xs hidden sm:inline">ڈاؤنلوڈ (Download)</span>
+          </button>
+          <button 
+            type="button"
+            onClick={() => setScale(s => Math.min(s + 0.25, 3.5))}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 hover:text-white"
+            title="Zoom In"
+          >
+            <ZoomIn size={20} />
+          </button>
+          <button 
+            type="button"
+            onClick={() => setScale(s => Math.max(s - 0.25, 0.4))}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 hover:text-white"
+            title="Zoom Out"
+          >
+            <ZoomOut size={20} />
+          </button>
+          <button 
+            type="button"
+            onClick={() => setRotation(r => (r + 90) % 360)}
+            className="p-1.5 hover:bg-white/10 rounded-lg transition-colors text-gray-300 hover:text-white"
+            title="Rotate"
+          >
+            <RotateCw size={20} />
+          </button>
+          <button 
+            type="button"
+            onClick={onClose}
+            className="p-1.5 hover:bg-white/20 bg-white/10 rounded-full transition-colors text-red-400 hover:text-red-300"
+            title="Close"
+          >
+            <X size={20} />
+          </button>
+        </div>
+      </div>
+
+      {/* Image Container */}
+      <div className="w-full h-full flex items-center justify-center overflow-auto py-16 px-4">
+        <motion.img 
+          src={src} 
+          alt="View Large" 
+          animate={{ scale, rotate: rotation }}
+          transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+          className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl origin-center cursor-move"
+          referrerPolicy="no-referrer"
+        />
+      </div>
+
+      {/* Semi-transparent Backdrop click triggers close */}
+      <div 
+        className="absolute inset-0 -z-10 cursor-zoom-out" 
+        onClick={onClose}
+      />
+    </div>
+  );
+}

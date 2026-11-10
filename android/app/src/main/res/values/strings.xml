@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Nafees jewellers</string>
+    <string name="title_activity_main">Nafees jewellers</string>
+    <string name="package_name">com.nafeesjewellers.app</string>
+    <string name="custom_url_scheme">com.nafeesjewellers.app</string>
+</resources>

@@ -6,8 +6,9 @@ import { formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
 import { 
   Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, Edit, 
   X, Download, ArrowDown, ArrowUp, ChevronLeft, Search, Users, ClipboardList, BookOpen,
-  Image as ImageIcon
+  Image as ImageIcon, FileText
 } from 'lucide-react';
+import { sharePdfViaWhatsApp } from '../lib/whatsappShare';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -34,7 +35,9 @@ export function Khaata({ lang }: KhaataProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [itemSearchTerm, setItemSearchTerm] = useState('');
   const [isAddingAccount, setIsAddingAccount] = useState(false);
+  const [editingAccountId, setEditingAccountId] = useState<number | null>(null);
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const accountVcfInputRef = useRef<HTMLInputElement>(null);
   
   // Account Form
   const [accountForm, setAccountForm] = useState<any>({
@@ -68,6 +71,9 @@ export function Khaata({ lang }: KhaataProps) {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
+  const [pdfTargetAccountId, setPdfTargetAccountId] = useState<number | null>(null);
+  const [isSharingPdf, setIsSharingPdf] = useState(false);
+  const [shareStatusMsg, setShareStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
   const handlePrint = useReactToPrint({
@@ -413,6 +419,37 @@ const normalizeEntry = (entry: any) => {
     );
   }, [ledgerWithRunningBalances, itemSearchTerm]);
 
+  const activePdfAccountId = pdfTargetAccountId ?? selectedAccountId;
+
+  const pdfAccount = useMemo(() => {
+    if (activePdfAccountId === null || !accounts) return null;
+    return accounts.find(a => a.id === activePdfAccountId) || null;
+  }, [activePdfAccountId, accounts]);
+
+  const pdfLedgerEntries = useMemo(() => {
+    if (activePdfAccountId === null) return [];
+    if (pdfTargetAccountId === null && selectedAccountId !== null) {
+      return filteredLedgerEntries;
+    }
+    if (!allEntries) return [];
+    const targetEntries = allEntries
+      .filter(e => Number(e.accountId) === Number(activePdfAccountId))
+      .sort((a, b) => (a.id || 0) - (b.id || 0));
+
+    let runningGold = 0;
+    return targetEntries.map(rawEntry => {
+      const e = normalizeEntry(rawEntry);
+      const pure = e.pureWeight || 0;
+      const pasa = e.pasaDia || 0;
+      runningGold = runningGold + pure - pasa;
+      const netBaqaya = Math.abs(runningGold) < 0.0001 ? 0 : Number(runningGold.toFixed(3));
+      return {
+        ...e,
+        runningGold: netBaqaya
+      };
+    });
+  }, [activePdfAccountId, pdfTargetAccountId, selectedAccountId, filteredLedgerEntries, allEntries]);
+
   const calculatePure = (mix: number, kaat: number, pak: number) => {
     if (!mix || mix <= 0) return 0;
     const ratiFactor = kaat > 0 ? (kaat <= 48 ? (96 - kaat) : kaat) : 96;
@@ -448,27 +485,68 @@ const normalizeEntry = (entry: any) => {
     }
   };
 
+  const handleAccountVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const telMatch = text.match(/TEL[^:]*:(.*)/);
+      if (fnMatch || telMatch) {
+        setAccountForm((prev: any) => ({
+          ...prev,
+          name: fnMatch ? fnMatch[1].trim() : prev.name,
+          phone: telMatch ? telMatch[1].trim() : prev.phone
+        }));
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleStartEditAccount = (account: KhaataAccount) => {
+    if (!account.id) return;
+    setEditingAccountId(account.id);
+    setAccountForm({
+      name: account.name || '',
+      phone: account.phone || '',
+      notes: account.notes || ''
+    });
+  };
+
   const handleSaveAccount = async () => {
-    if (!accountForm.name) {
+    if (!accountForm.name || !String(accountForm.name).trim()) {
       alert(lang === 'ur' ? "نام لکھنا لازمی ہے!" : "Name is required!");
       return;
     }
 
-    const newAccount: KhaataAccount = {
-      name: accountForm.name,
-      phone: accountForm.phone || '',
-      date: formatDate(new Date(), 'ur-PK'),
-      notes: accountForm.notes || ''
-    };
-
     try {
-      await db.khaataAccounts.add(newAccount);
-      setAccountForm({ name: '', phone: '', notes: '' });
-      setIsAddingAccount(false);
-      alert(lang === 'ur' ? "کھاتہ کامیابی سے بن گیا!" : "Account created successfully!");
+      if (editingAccountId !== null) {
+        await db.khaataAccounts.update(editingAccountId, {
+          name: String(accountForm.name).trim(),
+          phone: String(accountForm.phone || '').trim(),
+          notes: String(accountForm.notes || '').trim(),
+          _updatedAt: Date.now()
+        });
+        setEditingAccountId(null);
+        setAccountForm({ name: '', phone: '', notes: '' });
+        alert(lang === 'ur' ? "کھاتہ کی تفصیلات اپ ڈیٹ ہو گئیں!" : "Account updated successfully!");
+      } else {
+        const newAccount: KhaataAccount = {
+          name: String(accountForm.name).trim(),
+          phone: String(accountForm.phone || '').trim(),
+          date: formatDate(new Date(), 'ur-PK'),
+          notes: String(accountForm.notes || '').trim()
+        };
+        await db.khaataAccounts.add(newAccount);
+        setAccountForm({ name: '', phone: '', notes: '' });
+        setIsAddingAccount(false);
+        alert(lang === 'ur' ? "کھاتہ کامیابی سے بن گیا!" : "Account created successfully!");
+      }
     } catch (err) {
       console.error(err);
-      alert(lang === 'ur' ? `کھاتہ بنانے میں خرابی: ${err instanceof Error ? err.message : String(err)}` : `Error creating account: ${err instanceof Error ? err.message : String(err)}`);
+      alert(lang === 'ur' ? `کھاتہ محفوظ کرنے میں خرابی: ${err instanceof Error ? err.message : String(err)}` : `Error saving account: ${err instanceof Error ? err.message : String(err)}`);
     }
   };
 
@@ -582,7 +660,7 @@ const normalizeEntry = (entry: any) => {
     setIsAddingEntry(true);
   };
 
-  const handleShareWhatsApp = (account: KhaataAccount, gold: number, totalPasaDia?: number, saafBaqaya?: number) => {
+  const buildKhaataCaption = (account: KhaataAccount, gold: number, totalPasaDia?: number, saafBaqaya?: number) => {
     let balanceStr = '';
     const actualGold = gold;
     const actualPasa = totalPasaDia || 0;
@@ -599,13 +677,81 @@ const normalizeEntry = (entry: any) => {
       balanceStr += `\nصاف بقایا: حساب کلیئر (0.00g)`;
     }
 
-    const msg = `السلام علیکم ${account.name}!\nتفصیل کھاتہ منجانب ${APP_CONFIG.shopNameUrdu}:${balanceStr}\nتاریخ خلاصہ: ${formatDate(new Date(), 'ur-PK')}`;
+    return `السلام علیکم ${account.name}!\nتفصیل کھاتہ منجانب ${APP_CONFIG.shopNameUrdu}:${balanceStr}\nتاریخ خلاصہ: ${formatDate(new Date(), 'ur-PK')}`;
+  };
+
+  const handleShareWhatsApp = (account: KhaataAccount, gold: number, totalPasaDia?: number, saafBaqaya?: number) => {
+    const msg = buildKhaataCaption(account, gold, totalPasaDia, saafBaqaya);
     const url = formatWhatsAppUrl(account.phone, msg);
     if (url) window.open(url, '_blank');
   };
 
+  const handleSharePdfWhatsApp = async (account: KhaataAccount, existingPdfUrl?: string | null) => {
+    if (!account.id || isSharingPdf) return;
+    setIsSharingPdf(true);
+    setShareStatusMsg(null);
+    try {
+      let generatedUrl = existingPdfUrl || null;
+      if (!generatedUrl) {
+        setPdfTargetAccountId(account.id);
+        await new Promise(resolve => setTimeout(resolve, 150));
+        generatedUrl = await generatePDF();
+        setPdfTargetAccountId(null);
+      }
+
+      if (!generatedUrl) {
+        setShareStatusMsg({
+          text: lang === 'ur' ? 'کھاتہ PDF بنانے میں خرابی پیش آئی۔' : 'Failed to generate Khaata PDF.',
+          type: 'error'
+        });
+        return;
+      }
+
+      const bal = accountSummary[account.id] || { gold: 0, totalPasaDia: 0, saafBaqaya: 0 };
+      const caption = buildKhaataCaption(account, bal.gold, bal.totalPasaDia, bal.saafBaqaya);
+      const res = await sharePdfViaWhatsApp({
+        pdfDataUri: generatedUrl,
+        phone: account.phone || '',
+        accountName: account.name,
+        caption,
+        fileName: `Khaata_${account.name}_${formatDate(new Date(), 'en-US').replace(/[^a-zA-Z0-9-]/g, '_')}`
+      });
+
+      setShareStatusMsg({
+        text: res.message,
+        type: res.success ? 'success' : 'error'
+      });
+      setTimeout(() => setShareStatusMsg(null), 7000);
+    } catch (err) {
+      console.error('Error sharing Khaata PDF on WhatsApp:', err);
+      setPdfTargetAccountId(null);
+      setShareStatusMsg({
+        text: lang === 'ur' ? 'واٹس ایپ پر PDF شیئر کرنے میں خرابی پیش آئی۔' : 'Error sharing PDF via WhatsApp.',
+        type: 'error'
+      });
+    } finally {
+      setIsSharingPdf(false);
+    }
+  };
+
   return (
     <div className="container mx-auto pb-20 px-2 sm:px-4">
+      {shareStatusMsg && (
+        <div className={`mb-4 p-4 rounded-2xl border shadow-sm flex items-center justify-between gap-3 animate-in fade-in duration-200 ${
+          shareStatusMsg.type === 'success'
+            ? 'bg-emerald-50 border-emerald-200 text-emerald-900'
+            : 'bg-red-50 border-red-200 text-red-900'
+        }`}>
+          <span className="text-sm font-bold urdu-text leading-relaxed">{shareStatusMsg.text}</span>
+          <button
+            type="button"
+            onClick={() => setShareStatusMsg(null)}
+            className="p-1 hover:bg-black/5 rounded-full transition-colors cursor-pointer"
+          >
+            <X size={18} />
+          </button>
+        </div>
+      )}
       {selectedAccountId === null ? (
         <div className="space-y-6">
           <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4 bg-white p-5 rounded-2xl shadow-sm border border-sky-100">
@@ -614,7 +760,11 @@ const normalizeEntry = (entry: any) => {
               کھاتہ لیجر بک (Khaata Book)
             </h2>
             <button
-              onClick={() => setIsAddingAccount(true)}
+              onClick={() => {
+                setEditingAccountId(null);
+                setAccountForm({ name: '', phone: '', notes: '' });
+                setIsAddingAccount(true);
+              }}
               className="px-6 py-3 bg-gold text-black font-bold rounded-xl shadow-md hover:bg-gold-light transition-all flex items-center justify-center gap-2 cursor-pointer urdu-text"
             >
               <Plus size={20} />
@@ -739,10 +889,32 @@ const normalizeEntry = (entry: any) => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        handleStartEditAccount(account);
+                      }}
+                      className="p-2 text-sky-700 hover:bg-sky-50 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                      title={lang === 'ur' ? 'کھاتہ میں ترمیم کریں' : 'Edit Khaata'}
+                    >
+                      <Edit size={18} />
+                    </button>
+                    <button
+                      disabled={isSharingPdf}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleSharePdfWhatsApp(account);
+                      }}
+                      className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50 text-xs font-bold"
+                      title={lang === 'ur' ? 'مکمل کھاتہ PDF واٹس ایپ پر شیئر کریں' : 'Share Whole Khaata PDF on WhatsApp'}
+                    >
+                      <FileText size={15} />
+                      <span className="urdu-text">PDF واٹس ایپ</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
                         handleShareWhatsApp(account, bal.gold, bal.totalPasaDia, bal.saafBaqaya);
                       }}
-                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center justify-center"
-                      title="شیئر کریں"
+                      className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
+                      title={lang === 'ur' ? 'خلاصہ واٹس ایپ پر شیئر کریں' : 'Share Summary on WhatsApp'}
                     >
                       <MessageCircle size={18} />
                     </button>
@@ -751,7 +923,7 @@ const normalizeEntry = (entry: any) => {
                         e.stopPropagation();
                         setDeleteAccountId(account.id!);
                       }}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors flex items-center justify-center cursor-pointer"
                       title="حذف کریں"
                     >
                       <Trash2 size={18} />
@@ -781,7 +953,20 @@ const normalizeEntry = (entry: any) => {
                 <ChevronLeft size={24} />
               </button>
               <div>
-                <h2 className="text-2xl font-black text-sky-950 leading-tight">{selectedAccount?.name}</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-2xl font-black text-sky-950 leading-tight">{selectedAccount?.name}</h2>
+                  {selectedAccount && (
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditAccount(selectedAccount)}
+                      className="p-1.5 bg-sky-50 hover:bg-gold/20 text-sky-800 hover:text-gold-dark border border-sky-200 rounded-lg transition-all cursor-pointer flex items-center gap-1 text-xs font-bold"
+                      title={lang === 'ur' ? 'کھاتہ نام اور نمبر تبدیل کریں' : 'Edit Title & Contact'}
+                    >
+                      <Edit size={15} />
+                      <span className="urdu-text hidden sm:inline">{lang === 'ur' ? 'ترمیم' : 'Edit'}</span>
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 mt-1">
                   {selectedAccount?.phone && (
                     <span className="text-xs font-bold text-zinc-500 font-mono" dir="ltr">{selectedAccount?.phone}</span>
@@ -832,15 +1017,31 @@ const normalizeEntry = (entry: any) => {
                 <Printer size={18} /> پرنٹ رپورٹ
               </button>
               {selectedAccount && (
-                <button
-                  onClick={() => {
-                    const bal = accountSummary[selectedAccountId] || { gold: 0, totalPasaDia: 0, saafBaqaya: 0 };
-                    handleShareWhatsApp(selectedAccount, bal.gold, bal.totalPasaDia, bal.saafBaqaya);
-                  }}
-                  className="px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 text-xs"
-                >
-                  <MessageCircle size={18} /> شیئر خلاصہ
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={isSharingPdf}
+                    onClick={() => handleSharePdfWhatsApp(selectedAccount)}
+                    className="px-4 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 text-xs shadow-sm cursor-pointer disabled:opacity-60"
+                    title={lang === 'ur' ? 'مکمل کھاتہ PDF واٹس ایپ پر شیئر کریں' : 'Share Whole Khaata PDF on WhatsApp'}
+                  >
+                    {isSharingPdf ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <FileText size={18} />
+                    )}
+                    <span className="urdu-text">{lang === 'ur' ? 'واٹس ایپ PDF شیئر' : 'Share PDF WhatsApp'}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      const bal = accountSummary[selectedAccountId] || { gold: 0, totalPasaDia: 0, saafBaqaya: 0 };
+                      handleShareWhatsApp(selectedAccount, bal.gold, bal.totalPasaDia, bal.saafBaqaya);
+                    }}
+                    className="px-4 py-3 bg-emerald-50 text-emerald-700 border border-emerald-100 hover:bg-emerald-100 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+                  >
+                    <MessageCircle size={18} /> شیئر خلاصہ
+                  </button>
+                </>
               )}
             </div>
           </div>
@@ -1224,7 +1425,7 @@ const normalizeEntry = (entry: any) => {
               }
               return pages;
             };
-            const pages = chunkLedger(filteredLedgerEntries);
+            const pages = chunkLedger(pdfLedgerEntries);
             return pages.map((pageEntries, pageIndex) => (
               <div
                 key={pageIndex}
@@ -1241,7 +1442,7 @@ const normalizeEntry = (entry: any) => {
                     <p className="text-xs font-mono mt-1" dir="ltr">{t.shopPhone}</p>
                     <div className={`inline-block bg-zinc-100 px-4 py-1 rounded-full font-bold text-xs border border-zinc-200 mt-3 ${lang === 'ur' ? 'urdu-text' : ''}`}>
                       {lang === 'ur' ? 'تفصیلی سونا کھاتہ رپورٹ (Khaata Statement)' : 'Detailed Gold Khaata Statement'}
-                      {itemSearchTerm && (lang === 'ur' ? ` - فلٹر: ${itemSearchTerm}` : ` - Filter: ${itemSearchTerm}`)}
+                      {pdfTargetAccountId === null && itemSearchTerm && (lang === 'ur' ? ` - فلٹر: ${itemSearchTerm}` : ` - Filter: ${itemSearchTerm}`)}
                     </div>
                   </div>
                 ) : (
@@ -1249,7 +1450,7 @@ const normalizeEntry = (entry: any) => {
                     <h2 className="text-xl font-bold text-gold-dark">{t.shopName}</h2>
                     <div className={`text-xs text-zinc-500 font-bold ${lang === 'ur' ? 'urdu-text' : ''}`}>
                       {lang === 'ur' ? 'تفصیلی رپورٹ کھاتہ دار: ' : 'Detailed Statement for: '}
-                      <span className="text-zinc-900 font-black">{selectedAccount?.name}</span>
+                      <span className="text-zinc-900 font-black">{pdfAccount?.name}</span>
                       {lang === 'ur' ? ` (صفحہ ${pageIndex + 1} از ${pages.length})` : ` (Page ${pageIndex + 1} of ${pages.length})`}
                     </div>
                   </div>
@@ -1262,11 +1463,11 @@ const normalizeEntry = (entry: any) => {
                         <th className={`p-2 font-bold text-black w-[20%] ${lang === 'ur' ? 'urdu-text' : ''}`}>
                           {lang === 'ur' ? 'نام کھاتہ دار:' : 'Account Holder:'}
                         </th>
-                        <td className="p-2 font-bold text-black text-sm w-[30%]">{selectedAccount?.name}</td>
+                        <td className="p-2 font-bold text-black text-sm w-[30%]">{pdfAccount?.name}</td>
                         <th className={`p-2 font-bold text-black w-[20%] ${lang === 'ur' ? 'urdu-text' : ''}`}>
                           {lang === 'ur' ? 'فون نمبر:' : 'Phone Number:'}
                         </th>
-                        <td className="p-2 font-mono font-bold text-black w-[30%]" dir="ltr">{selectedAccount?.phone || '-'}</td>
+                        <td className="p-2 font-mono font-bold text-black w-[30%]" dir="ltr">{pdfAccount?.phone || '-'}</td>
                       </tr>
                       <tr className="border-b border-zinc-200">
                         <th className={`p-2 font-bold text-black ${lang === 'ur' ? 'urdu-text' : ''}`}>
@@ -1277,7 +1478,7 @@ const normalizeEntry = (entry: any) => {
                           {lang === 'ur' ? 'کُل آئٹم پاسا:' : 'Total Item Pure Gold:'}
                         </th>
                         <td className="p-2 font-mono font-bold text-black">
-                          {(accountSummary[selectedAccountId || 0]?.gold || 0).toFixed(2)}g
+                          {(accountSummary[activePdfAccountId || 0]?.gold || 0).toFixed(2)}g
                         </td>
                       </tr>
                       <tr className="border-b border-zinc-200">
@@ -1285,16 +1486,16 @@ const normalizeEntry = (entry: any) => {
                           {lang === 'ur' ? 'کُل پاسا دیا/ملا:' : 'Total Gold Paid/Rec:'}
                         </th>
                         <td className="p-2 font-mono font-bold text-black">
-                          {(accountSummary[selectedAccountId || 0]?.totalPasaDia || 0).toFixed(2)}g
+                          {(accountSummary[activePdfAccountId || 0]?.totalPasaDia || 0).toFixed(2)}g
                         </td>
                         <th className={`p-2 font-bold text-black ${lang === 'ur' ? 'urdu-text' : ''}`}>
                           {lang === 'ur' ? 'صاف بقایا:' : 'Net Balance:'}
                         </th>
                         <td className="p-2 font-bold text-black text-sm">
-                          {Math.abs(accountSummary[selectedAccountId || 0]?.saafBaqaya || 0).toFixed(2)}g {lang === 'ur' ? '(سونا)' : '(Gold)'} {
-                            (accountSummary[selectedAccountId || 0]?.saafBaqaya || 0) > 0.005 
+                          {Math.abs(accountSummary[activePdfAccountId || 0]?.saafBaqaya || 0).toFixed(2)}g {lang === 'ur' ? '(سونا)' : '(Gold)'} {
+                            (accountSummary[activePdfAccountId || 0]?.saafBaqaya || 0) > 0.005 
                               ? (lang === 'ur' ? '(ہمارے ذمہ)' : '(Our Liability)') 
-                              : (accountSummary[selectedAccountId || 0]?.saafBaqaya || 0) < -0.005 
+                              : (accountSummary[activePdfAccountId || 0]?.saafBaqaya || 0) < -0.005 
                                 ? (lang === 'ur' ? '(ان کے ذمہ)' : '(Their Balance)') 
                                 : (lang === 'ur' ? '(حساب صاف)' : '(Settled)')
                           }
@@ -1519,6 +1720,18 @@ const normalizeEntry = (entry: any) => {
                 <span className="urdu-text text-xl text-black">PDF خلاصہ ڈاؤن لوڈ</span>
               </button>
 
+              {selectedAccount && (
+                <button 
+                  type="button"
+                  disabled={!pdfUrl || isSharingPdf}
+                  onClick={() => handleSharePdfWhatsApp(selectedAccount, pdfUrl)}
+                  className="flex-1 min-w-[180px] bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-50 cursor-pointer"
+                >
+                  <MessageCircle size={24} />
+                  <span className="urdu-text text-xl">واٹس ایپ PDF شیئر</span>
+                </button>
+              )}
+
               <button 
                 type="button"
                 onClick={() => {
@@ -1552,6 +1765,117 @@ const normalizeEntry = (entry: any) => {
         message={lang === 'ur' ? 'کیا آپ واقعی یہ کھاتہ انٹری حذف کرنا چاہتے ہیں؟' : 'Are you sure you want to delete this entry?'}
         lang={lang}
       />
+
+      {editingAccountId !== null && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden border-2 border-gold/50">
+            <div className="p-4 bg-sky-950 text-white flex justify-between items-center">
+              <h3 className="text-lg font-bold urdu-text flex items-center gap-2">
+                <Edit size={20} className="text-gold" />
+                {lang === 'ur' ? 'کھاتہ کی تفصیلات میں ترمیم (Edit Khaata)' : 'Edit Khaata Account'}
+              </h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingAccountId(null);
+                  setAccountForm({ name: '', phone: '', notes: '' });
+                }}
+                className="p-1.5 hover:bg-white/10 rounded-full text-white transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-zinc-600 urdu-text block mb-1.5 text-right">
+                  {lang === 'ur' ? 'کھاتہ کا نام / عنوان (Khaata Title)' : 'Khaata Title / Name'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={lang === 'ur' ? 'نام (Name)' : 'Account Title / Name'}
+                  value={accountForm.name}
+                  onChange={e => setAccountForm({ ...accountForm, name: e.target.value })}
+                  className="w-full p-3.5 border border-sky-200 rounded-xl outline-none focus:border-gold text-black text-center font-bold"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-600 urdu-text block mb-1.5 text-right">
+                  {lang === 'ur' ? 'موبائل / رابطہ نمبر (Contact Number)' : 'Contact Number'}
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="03xx xxxxxxx"
+                    value={accountForm.phone}
+                    onChange={e => setAccountForm({ ...accountForm, phone: e.target.value })}
+                    dir="ltr"
+                    className="flex-1 p-3.5 border border-sky-200 rounded-xl outline-none focus:border-gold text-black text-center font-mono font-bold"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsContactPickerOpen(true)}
+                    className="px-3.5 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-xl flex items-center justify-center transition-all cursor-pointer"
+                    title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
+                  >
+                    <Users size={18} />
+                  </button>
+                  <input
+                    type="file"
+                    accept=".vcf"
+                    onChange={handleAccountVcfUpload}
+                    ref={accountVcfInputRef}
+                    className="hidden"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => accountVcfInputRef.current?.click()}
+                    className="px-3.5 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-xl flex items-center justify-center transition-all cursor-pointer"
+                    title={lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+                  >
+                    <Plus size={18} />
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-zinc-600 urdu-text block mb-1.5 text-right">
+                  {lang === 'ur' ? 'تفصیل / ریمارکس (Optional Notes)' : 'Optional Notes'}
+                </label>
+                <input
+                  type="text"
+                  placeholder={lang === 'ur' ? 'تفصیل / ریمارکس' : 'Optional Notes'}
+                  value={accountForm.notes}
+                  onChange={e => setAccountForm({ ...accountForm, notes: e.target.value })}
+                  className="w-full p-3.5 border border-sky-200 rounded-xl outline-none focus:border-gold text-black text-center"
+                />
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingAccountId(null);
+                    setAccountForm({ name: '', phone: '', notes: '' });
+                  }}
+                  className="px-5 py-2.5 bg-zinc-100 text-zinc-600 rounded-xl hover:bg-zinc-200 font-bold urdu-text cursor-pointer"
+                >
+                  {lang === 'ur' ? 'کینسل' : 'Cancel'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveAccount}
+                  className="px-6 py-2.5 bg-gold text-black rounded-xl hover:bg-gold-light font-bold urdu-text flex items-center gap-2 shadow-md cursor-pointer"
+                >
+                  <Check size={18} />
+                  {lang === 'ur' ? 'تبدیلیاں محفوظ کریں' : 'Save Changes'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ContactPickerModal
         isOpen={isContactPickerOpen}

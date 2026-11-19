@@ -38,6 +38,10 @@ export default function Orders({ lang }: OrdersProps) {
   const [showOrderStatusOnBill, setShowOrderStatusOnBill] = useState(true);
   const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
   const vcfInputRef = useRef<HTMLInputElement>(null);
+  const [formQists, setFormQists] = useState<OrderPayment[]>([]);
+  const [firstPaymentDate, setFirstPaymentDate] = useState<string>('');
+  const [newQistAmt, setNewQistAmt] = useState<string>('');
+  const [newQistDate, setNewQistDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -222,9 +226,25 @@ export default function Orders({ lang }: OrdersProps) {
     return true;
   });
 
-  const ordersTotals = (orders || []).reduce((acc, o) => {
-    const wt = parseFloat(o.totalWt || o.readyWt || '0') || 0;
+  const getOrderWeight = (o: Order) => {
+    if (o.readyWt !== undefined && o.readyWt !== null && String(o.readyWt).trim() !== '') {
+      return parseFloat(o.readyWt) || 0;
+    }
+    const total = parseFloat(o.totalWt || '0') || 0;
     const polish = parseFloat(o.makingCharges || o.weightPolish || '0') || 0;
+    if (total > 0 && polish > 0 && total >= polish) {
+      return Number((total - polish).toFixed(2));
+    }
+    return total;
+  };
+
+  const getOrderPolish = (o: Order) => {
+    return parseFloat(o.makingCharges || o.weightPolish || '0') || 0;
+  };
+
+  const ordersTotals = (orders || []).reduce((acc, o) => {
+    const wt = getOrderWeight(o);
+    const polish = getOrderPolish(o);
     const mazdori = Number(o.mazdori) || 0;
 
     acc.weight += wt;
@@ -235,16 +255,65 @@ export default function Orders({ lang }: OrdersProps) {
     return acc;
   }, { weight: 0, polish: 0, mazdori: 0, total: 0, rem: 0 });
 
+  const getTotalPaidInForm = () => {
+    const advanceAmt = Number(formData.recAmt) || 0;
+    const qistsSum = formQists.reduce((sum, p) => sum + (Number(p.amt) || 0), 0);
+    const pendingQist = Number(newQistAmt) || 0;
+    return advanceAmt + qistsSum + pendingQist;
+  };
+
   const updateRem = () => {
     const total = (Number(formData.goldAmount) || 0) + (Number(formData.mazdori) || 0);
     const oldGoldMinus = Number(formData.oldGoldMinus) || 0;
     const discount = Number(formData.discount) || 0;
-    if (editId) {
-      const otherPaymentsSum = editingPayments.slice(1).reduce((sum, p) => sum + p.amt, 0);
-      return Math.round(total - oldGoldMinus - discount - (Number(formData.recAmt) || 0) - otherPaymentsSum);
-    } else {
-      return Math.round(total - oldGoldMinus - discount - (Number(formData.recAmt) || 0));
-    }
+    return Math.round(total - oldGoldMinus - discount - getTotalPaidInForm());
+  };
+
+  const handleAddFormQist = () => {
+    const amt = parseFloat(newQistAmt);
+    if (isNaN(amt) || amt <= 0) return;
+    const formattedDate = newQistDate
+      ? formatDate(new Date(newQistDate + 'T00:00:00'), 'ur-PK')
+      : formatDate(new Date(), 'ur-PK');
+    setFormQists(prev => [...prev, { amt, date: formattedDate }]);
+    setNewQistAmt('');
+  };
+
+  const handleRemoveFormQist = (indexToRemove: number) => {
+    setFormQists(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const resetForm = () => {
+    setEditId(null);
+    setCurrentImg(null);
+    setEditingPayments([]);
+    setFormQists([]);
+    setFirstPaymentDate('');
+    setNewQistAmt('');
+    setNewQistDate(new Date().toISOString().split('T')[0]);
+    setFormData({
+      name: '',
+      phone: '',
+      date: new Date().toISOString().split('T')[0],
+      due: '',
+      item: '',
+      measurements: '',
+      pricePerTola: '',
+      karigar: '',
+      oldWt: '',
+      readyWt: '',
+      total: 0,
+      recAmt: 0,
+      discount: 0,
+      status: 'pending',
+      makingCharges: '',
+      weightPolish: '',
+      totalWt: '',
+      izafiWt: '',
+      goldAmount: 0,
+      mazdori: 0,
+      oldGoldMinus: 0
+    });
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -281,14 +350,27 @@ export default function Orders({ lang }: OrdersProps) {
 
   const handleSave = async () => {
     if (!formData.name) return alert(lang === 'ur' ? "نام ضروری ہے!" : "Name is required!");
-    
-    let payments = editId ? (await db.orders.get(editId))?.payments || [] : [{ amt: formData.recAmt, date: formatDate(new Date(), 'ur-PK') }];
-    
-    if (editId && payments.length > 0) {
-      payments[0] = { ...payments[0], amt: formData.recAmt };
+
+    const finalQists = [...formQists];
+    const pendingAmt = parseFloat(newQistAmt);
+    if (!isNaN(pendingAmt) && pendingAmt > 0) {
+      const formattedDate = newQistDate
+        ? formatDate(new Date(newQistDate + 'T00:00:00'), 'ur-PK')
+        : formatDate(new Date(), 'ur-PK');
+      finalQists.push({ amt: pendingAmt, date: formattedDate });
     }
-    
-    const paymentsSum = payments.reduce((sum, p) => sum + p.amt, 0);
+
+    const advanceAmt = Number(formData.recAmt) || 0;
+    const payments: OrderPayment[] = [];
+    if (advanceAmt > 0) {
+      payments.push({
+        amt: advanceAmt,
+        date: firstPaymentDate || formatDate(new Date(), 'ur-PK')
+      });
+    }
+    payments.push(...finalQists);
+
+    const paymentsSum = payments.reduce((sum, p) => sum + (Number(p.amt) || 0), 0);
     const goldAmount = Number(formData.goldAmount) || 0;
     const mazdori = Number(formData.mazdori) || 0;
     const oldGoldMinus = Number(formData.oldGoldMinus) || 0;
@@ -345,36 +427,27 @@ export default function Orders({ lang }: OrdersProps) {
     }, 400);
 
     setIsAdding(false);
-    setEditId(null);
-    setCurrentImg(null);
-    setEditingPayments([]);
-    setFormData({
-      name: '',
-      phone: '',
-      date: new Date().toISOString().split('T')[0],
-      due: '',
-      item: '',
-      measurements: '',
-      pricePerTola: '',
-      karigar: '',
-      oldWt: '',
-      readyWt: '',
-      total: 0,
-      recAmt: 0,
-      status: 'pending',
-      makingCharges: '',
-      weightPolish: '',
-      totalWt: '',
-      izafiWt: '',
-      goldAmount: 0,
-      mazdori: 0,
-      oldGoldMinus: 0
-    });
+    resetForm();
   };
 
   const handleEdit = (order: Order) => {
+    const mazdoriVal = Number(order.mazdori) || 0;
+    const totalVal = Number(order.total) || 0;
+    const goldAmountVal =
+      order.goldAmount !== undefined &&
+      order.goldAmount !== null &&
+      !(order.goldAmount === 0 && totalVal > mazdoriVal)
+        ? Number(order.goldAmount) || 0
+        : Math.max(0, totalVal - mazdoriVal);
+
+    const existingPayments = order.payments || [];
     setEditId(order.id!);
-    setEditingPayments(order.payments || []);
+    setEditingPayments(existingPayments);
+    setFirstPaymentDate(existingPayments[0]?.date || formatDate(new Date(), 'ur-PK'));
+    setFormQists(existingPayments.slice(1));
+    setNewQistAmt('');
+    setNewQistDate(new Date().toISOString().split('T')[0]);
+
     setFormData({
       name: order.name,
       phone: order.phone,
@@ -386,16 +459,17 @@ export default function Orders({ lang }: OrdersProps) {
       karigar: order.karigar,
       oldWt: order.oldWt,
       readyWt: order.readyWt,
-      total: order.total,
-      recAmt: order.payments[0]?.amt || 0,
+      total: goldAmountVal + mazdoriVal,
+      recAmt: existingPayments[0]?.amt || 0,
+      discount: Number(order.discount) || 0,
       status: order.status,
       makingCharges: order.makingCharges || '',
       weightPolish: order.weightPolish || '',
       totalWt: order.totalWt || '',
       izafiWt: order.izafiWt || '',
-      goldAmount: order.goldAmount || 0,
-      mazdori: order.mazdori || 0,
-      oldGoldMinus: order.oldGoldMinus || 0
+      goldAmount: goldAmountVal,
+      mazdori: mazdoriVal,
+      oldGoldMinus: Number(order.oldGoldMinus) || 0
     });
     setCurrentImg(order.img || null);
     setIsAdding(true);
@@ -693,7 +767,15 @@ export default function Orders({ lang }: OrdersProps) {
       <div className="flex justify-between items-center mb-6">
         <h2 className="text-3xl font-bold text-gold-dark urdu-text">{t.orders}</h2>
         <button 
-          onClick={() => setIsAdding(!isAdding)}
+          onClick={() => {
+            if (isAdding) {
+              setIsAdding(false);
+              resetForm();
+            } else {
+              resetForm();
+              setIsAdding(true);
+            }
+          }}
           className="flex items-center gap-2 bg-gold text-black font-bold px-6 py-3 rounded-xl hover:bg-gold-light transition-all shadow-lg shadow-gold-20"
         >
           <Plus size={20} />
@@ -703,7 +785,12 @@ export default function Orders({ lang }: OrdersProps) {
 
       {isAdding && (
         <div className="bg-white p-6 rounded-xl shadow-sm border-t-4 border-gold mb-6 animate-in fade-in slide-in-from-top-4 duration-300 border border-sky-200">
-          <h3 className="text-xl font-bold mb-4 urdu-text text-gold-dark"><i className="fas fa-gem"></i> نیا آرڈر بکنگ</h3>
+          <h3 className="text-xl font-bold mb-4 urdu-text text-gold-dark">
+            <i className="fas fa-gem"></i>{' '}
+            {editId
+              ? (lang === 'ur' ? 'آرڈر ایڈٹ کریں' : 'Edit Order')
+              : (lang === 'ur' ? 'نیا آرڈر بکنگ' : 'New Order Booking')}
+          </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-1">
               <label className="text-xs text-zinc-500 urdu-text">نام کسٹمر:</label>
@@ -1021,24 +1108,26 @@ export default function Orders({ lang }: OrdersProps) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-zinc-500 urdu-text">{lang === 'ur' ? 'پرانا سونا منہا (Old Gold Minus):' : 'Old Gold Minus:'}</label>
-              <input 
-                type="number" 
-                value={formData.oldGoldMinus || ''}
-                onChange={e => setFormData({ ...formData, oldGoldMinus: Number(e.target.value) || 0 })}
-                className="w-full p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold"
-                placeholder="e.g. 10,000"
-              />
-            </div>
-            <div className="space-y-1">
               <label className="text-xs text-zinc-500 urdu-text">{lang === 'ur' ? 'وصول شدہ رقم / ایڈوانس (Advance):' : 'Advance Amount:'}</label>
-              <input 
-                type="number" 
-                value={formData.recAmt || ''}
-                onChange={e => setFormData({ ...formData, recAmt: Number(e.target.value) || 0 })}
-                className="w-full p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold"
-                placeholder="e.g. 10,000"
-              />
+              <div className="flex gap-2">
+                <input 
+                  type="number" 
+                  value={formData.recAmt || ''}
+                  onChange={e => setFormData({ ...formData, recAmt: Number(e.target.value) || 0 })}
+                  className="flex-1 p-3 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold"
+                  placeholder="e.g. 10,000"
+                />
+                {formData.recAmt > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, recAmt: 0 })}
+                    className="px-3 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 rounded-lg transition-colors flex items-center justify-center"
+                    title={lang === 'ur' ? 'ایڈوانس حذف کریں' : 'Delete Advance'}
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                )}
+              </div>
             </div>
             <div className="space-y-1">
               <label className="text-xs text-zinc-500 urdu-text">{lang === 'ur' ? 'ڈسکاؤنٹ (Discount):' : 'Discount:'}</label>
@@ -1050,11 +1139,133 @@ export default function Orders({ lang }: OrdersProps) {
                 placeholder="e.g. 500"
               />
             </div>
+
+            {/* Qist / Installments Section inside Order Form */}
+            <div className="col-span-1 md:col-span-2 bg-sky-50/70 p-4 rounded-xl border border-sky-200 space-y-3 mt-1">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h4 className="font-bold text-sm text-sky-900 urdu-text flex items-center gap-1.5">
+                  <span className="w-1.5 h-3.5 bg-gold rounded-full inline-block"></span>
+                  {lang === 'ur' ? 'قسط / مزید ادائیگیاں (Qist / Installments)' : 'Qist / Installments'}
+                </h4>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full urdu-text">
+                  {lang === 'ur' ? `کل وصول شدہ: Rs. ${getTotalPaidInForm().toLocaleString()}` : `Total Paid: Rs. ${getTotalPaidInForm().toLocaleString()}`}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 items-end">
+                <div className="sm:col-span-5 space-y-1">
+                  <label className="text-[11px] text-zinc-500 urdu-text">{lang === 'ur' ? 'قسط کی رقم (Qist Amount):' : 'Qist Amount:'}</label>
+                  <input
+                    type="number"
+                    value={newQistAmt}
+                    onChange={e => setNewQistAmt(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black font-bold text-sm"
+                    placeholder={lang === 'ur' ? 'مثلاً 5,000' : 'e.g. 5,000'}
+                  />
+                </div>
+                <div className="sm:col-span-4 space-y-1">
+                  <label className="text-[11px] text-zinc-500 urdu-text">{lang === 'ur' ? 'تاریخ (Date):' : 'Date:'}</label>
+                  <input
+                    type="date"
+                    value={newQistDate}
+                    onChange={e => setNewQistDate(e.target.value)}
+                    className="w-full p-2.5 bg-white border border-sky-200 rounded-lg outline-none focus:border-gold text-black text-sm"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <button
+                    type="button"
+                    onClick={handleAddFormQist}
+                    disabled={!newQistAmt || Number(newQistAmt) <= 0}
+                    className="w-full p-2.5 bg-sky-700 hover:bg-sky-800 text-white font-bold rounded-lg transition-all flex items-center justify-center gap-1.5 text-sm urdu-text disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    <Plus size={16} />
+                    <span>{lang === 'ur' ? 'قسط شامل کریں' : 'Add Qist'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {(formData.recAmt > 0 || formQists.length > 0) ? (
+                <div className="space-y-1.5 pt-1">
+                  {formData.recAmt > 0 && (
+                    <div className="flex justify-between items-center text-xs p-2.5 bg-white rounded-lg border border-sky-200 shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-bold urdu-text">
+                          {lang === 'ur' ? 'قسط 1 (ایڈوانس)' : 'Qist 1 (Advance)'}
+                        </span>
+                        <span className="text-zinc-500 font-mono">{firstPaymentDate || formatDate(new Date(), 'ur-PK')}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-emerald-700 font-mono text-sm">{formatCurrency(formData.recAmt)}</span>
+                        <button
+                          type="button"
+                          onClick={() => setFormData({ ...formData, recAmt: 0 })}
+                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                          title={lang === 'ur' ? 'حذف کریں' : 'Delete'}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {formQists.map((q, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-xs p-2.5 bg-white rounded-lg border border-sky-200 shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 bg-sky-100 text-sky-800 rounded font-bold urdu-text">
+                          {lang === 'ur' ? `قسط ${formData.recAmt > 0 ? idx + 2 : idx + 1}` : `Qist ${formData.recAmt > 0 ? idx + 2 : idx + 1}`}
+                        </span>
+                        <span className="text-zinc-500 font-mono">{q.date}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-bold text-emerald-700 font-mono text-sm">{formatCurrency(q.amt)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveFormQist(idx)}
+                          className="text-red-500 hover:text-red-700 p-1 rounded hover:bg-red-50 transition-colors cursor-pointer"
+                          title={lang === 'ur' ? 'قسط حذف کریں' : 'Delete Qist'}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400 urdu-text text-center py-1">
+                  {lang === 'ur' ? 'کوئی قسط شامل نہیں ہے' : 'No installments added'}
+                </p>
+              )}
+            </div>
           </div>
           
-          <div className="mt-6 p-4 bg-sky-50 rounded-xl border border-gold-20 flex justify-between items-center shadow-inner">
-            <span className="text-zinc-600 urdu-text font-bold">{lang === 'ur' ? 'صاف بقایا:' : 'Net Remaining:'}</span>
-            <span className="text-2xl font-black text-gold-dark">Rs. {updateRem().toLocaleString()}</span>
+          <div className="mt-6 p-4 bg-sky-50 rounded-xl border border-gold-20 shadow-inner space-y-2">
+            <div className="flex flex-wrap justify-between gap-2 text-xs text-zinc-600 border-b border-sky-200/70 pb-2">
+              <span className="urdu-text">
+                {lang === 'ur' ? 'کل رقم:' : 'Total:'}{' '}
+                <strong className="font-mono text-zinc-900">
+                  Rs. {((Number(formData.goldAmount) || 0) + (Number(formData.mazdori) || 0)).toLocaleString()}
+                </strong>
+              </span>
+              <span className="urdu-text">
+                {lang === 'ur' ? 'وصول شدہ + قسطیں:' : 'Paid + Qists:'}{' '}
+                <strong className="font-mono text-emerald-700">
+                  Rs. {getTotalPaidInForm().toLocaleString()}
+                </strong>
+              </span>
+              {(Number(formData.discount) || 0) > 0 && (
+                <span className="urdu-text">
+                  {lang === 'ur' ? 'ڈسکاؤنٹ:' : 'Discount:'}{' '}
+                  <strong className="font-mono text-amber-700">
+                    Rs. {(Number(formData.discount) || 0).toLocaleString()}
+                  </strong>
+                </span>
+              )}
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-700 urdu-text font-bold">{lang === 'ur' ? 'صاف بقایا:' : 'Net Remaining:'}</span>
+              <span className="text-2xl font-black text-gold-dark">Rs. {updateRem().toLocaleString()}</span>
+            </div>
           </div>
 
           <select 
@@ -1201,14 +1412,14 @@ export default function Orders({ lang }: OrdersProps) {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="bg-white/10 backdrop-blur-sm p-3.5 rounded-xl border border-white/10">
                 <div className="flex items-center justify-between text-amber-300 text-xs mb-1">
-                  <span className="urdu-text font-bold">{lang === 'ur' ? 'کل آرڈر وزن' : 'Total Order Wt'}</span>
+                  <span className="urdu-text font-bold">{lang === 'ur' ? 'کل وزن' : 'Total Weight'}</span>
                   <Scale size={16} />
                 </div>
                 <div className="text-2xl font-black font-mono text-white">
                   {ordersTotals.weight.toFixed(2)} <span className="text-xs font-normal text-amber-200">g</span>
                 </div>
                 <div className="text-[10px] text-sky-200 urdu-text mt-0.5">
-                  {lang === 'ur' ? 'آرڈرز کا کل تیار/ٹوٹل وزن' : 'Total gold weight'}
+                  {lang === 'ur' ? 'آرڈرز کا کل وزن (پالش کے بغیر)' : 'Total entered weight (excl. polish)'}
                 </div>
               </div>
 
@@ -1258,8 +1469,8 @@ export default function Orders({ lang }: OrdersProps) {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {orders?.map((order) => {
           const isClear = order.rem <= 0;
-          const orderWeight = parseFloat(order.totalWt || order.readyWt || '0') || 0;
-          const orderPolish = parseFloat(order.makingCharges || order.weightPolish || '0') || 0;
+          const orderWeight = getOrderWeight(order);
+          const orderPolish = getOrderPolish(order);
           const orderMazdori = Number(order.mazdori) || 0;
 
           return (
@@ -1358,7 +1569,7 @@ export default function Orders({ lang }: OrdersProps) {
               {order.makingCharges && (
                 <div className="flex justify-between text-amber-800 bg-amber-50 px-2 py-1 rounded-md border border-amber-100">
                   <span className="urdu-text text-xs">{lang === 'ur' ? 'پالش:' : 'Polish:'}</span>
-                  <span className="font-bold text-xs">{order.makingCharges}</span>
+                  <span className="font-bold text-xs">{String(order.makingCharges).endsWith('g') ? order.makingCharges : `${order.makingCharges}g`}</span>
                 </div>
               )}
               {order.totalWt && (

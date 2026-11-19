@@ -3,7 +3,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Repair } from '../db';
 import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
-import { Plus, Check, Trash2, Clock, MessageCircle, Printer, Camera, RotateCcw, X, AlertTriangle, Download, AlertCircle, Search, Image as ImageIcon } from 'lucide-react';
+import { Plus, Check, Trash2, Clock, MessageCircle, Printer, Camera, RotateCcw, X, AlertTriangle, Download, AlertCircle, Search, Image as ImageIcon, Users } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -22,12 +22,15 @@ interface RepairsProps {
 }
 
 import ImageLightbox from './ImageLightbox';
+import ContactPickerModal from './ContactPickerModal';
 
 export default function Repairs({ lang }: RepairsProps) {
   const t = translations[lang];
   const [isAdding, setIsAdding] = useState(false);
   const [currentImg, setCurrentImg] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
+  const [isContactPickerOpen, setIsContactPickerOpen] = useState(false);
+  const vcfInputRef = useRef<HTMLInputElement>(null);
   const [formData, setFormData] = useState<Partial<Repair>>({
     customerName: '',
     customerPhone: '',
@@ -184,6 +187,31 @@ export default function Repairs({ lang }: RepairsProps) {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleVcfUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const text = event.target?.result as string;
+      const fnMatch = text.match(/FN:(.*)/);
+      const nMatch = text.match(/N:(.*)/);
+      const telMatch = text.match(/TEL[^:]*:(.*)/);
+      const parsedName = fnMatch
+        ? fnMatch[1].trim()
+        : nMatch
+          ? nMatch[1].split(';').filter(Boolean).join(' ').trim()
+          : '';
+      if (parsedName || telMatch) {
+        setFormData(prev => ({
+          ...prev,
+          customerName: parsedName || prev.customerName,
+          customerPhone: telMatch ? telMatch[1].trim() : prev.customerPhone
+        }));
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSave = async () => {
@@ -356,12 +384,38 @@ export default function Repairs({ lang }: RepairsProps) {
             </div>
             <div>
               <label className="block text-sm font-medium text-zinc-500 mb-1 urdu-text">{t.phoneNumber}</label>
-              <input 
-                type="text" 
-                value={formData.customerPhone}
-                onChange={e => setFormData({...formData, customerPhone: e.target.value})}
-                className="w-full bg-white border border-sky-200 rounded-lg p-3 focus:border-gold outline-none text-black"
-              />
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  value={formData.customerPhone}
+                  onChange={e => setFormData({...formData, customerPhone: e.target.value})}
+                  className="flex-1 bg-white border border-sky-200 rounded-lg p-3 focus:border-gold outline-none text-black font-mono"
+                  dir="ltr"
+                />
+                <button
+                  type="button"
+                  onClick={() => setIsContactPickerOpen(true)}
+                  className="px-3 bg-gold/10 hover:bg-gold/25 text-gold-dark border border-gold/30 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                  title={lang === 'ur' ? 'رابطہ منتخب کریں' : 'Select Contact'}
+                >
+                  <Users size={18} />
+                </button>
+                <input
+                  type="file"
+                  accept=".vcf"
+                  onChange={handleVcfUpload}
+                  ref={vcfInputRef}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => vcfInputRef.current?.click()}
+                  className="px-3 bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-200 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+                  title={lang === 'ur' ? 'VCF فائل اپ لوڈ کریں' : 'Upload VCF File'}
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
             </div>
           </div>
           <div className="space-y-4">
@@ -551,6 +605,19 @@ export default function Repairs({ lang }: RepairsProps) {
       {lightboxImage && (
         <ImageLightbox src={lightboxImage} onClose={() => setLightboxImage(null)} title={lang === 'ur' ? 'مرمت کی تصویر' : 'Repair Image'} />
       )}
+
+      <ContactPickerModal
+        isOpen={isContactPickerOpen}
+        onClose={() => setIsContactPickerOpen(false)}
+        onSelect={(contact) => {
+          setFormData(prev => ({
+            ...prev,
+            customerName: contact.name,
+            customerPhone: contact.phone
+          }));
+        }}
+        lang={lang}
+      />
     </div>
   );
 }

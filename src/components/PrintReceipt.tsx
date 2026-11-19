@@ -799,10 +799,12 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
                   <th className="font-nastaliq font-bold" style={{ padding: '5px 12px', fontSize: '15px' }}>کل رقم</th>
                   <td className="font-mono font-bold text-right" style={{ padding: '5px 12px', fontSize: '15px' }}>{totalAmount.toLocaleString()}</td>
                 </tr>
-                <tr className="text-red-700">
-                  <th className="font-nastaliq" style={{ padding: '5px 12px', fontSize: '15px' }}>پرانا سونا منہا (-)</th>
-                  <td className="font-mono font-bold text-right" style={{ padding: '5px 12px', fontSize: '15px' }}>{oldGoldMinus.toLocaleString()}</td>
-                </tr>
+                {oldGoldMinus > 0 && (
+                  <tr className="text-red-700">
+                    <th className="font-nastaliq" style={{ padding: '5px 12px', fontSize: '15px' }}>پرانا سونا منہا (-)</th>
+                    <td className="font-mono font-bold text-right" style={{ padding: '5px 12px', fontSize: '15px' }}>{oldGoldMinus.toLocaleString()}</td>
+                  </tr>
+                )}
                 <tr className="text-green-700">
                   <th className="font-nastaliq" style={{ padding: '5px 12px', fontSize: '15px' }}>وصول شدہ رقم</th>
                   <td className="font-mono font-bold text-right" style={{ padding: '5px 12px', fontSize: '15px' }}>{paymentsSum.toLocaleString()}</td>

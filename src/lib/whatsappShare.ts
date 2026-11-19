@@ -11,6 +11,14 @@ export interface WhatsAppImageShareOptions {
   fileName?: string;
 }
 
+export interface WhatsAppPdfShareOptions {
+  pdfDataUri: string;
+  phone: string;
+  accountName?: string;
+  caption?: string;
+  fileName?: string;
+}
+
 export interface ShareResult {
   success: boolean;
   message: string;
@@ -23,7 +31,8 @@ export interface ShareResult {
 export function base64ToBlob(base64: string): { blob: Blob; mimeType: string } {
   try {
     const parts = base64.split(';base64,');
-    const mimeType = parts[0]?.replace('data:', '') || 'image/jpeg';
+    const rawMime = parts[0]?.replace('data:', '') || 'image/jpeg';
+    const mimeType = rawMime.split(';')[0].trim() || 'image/jpeg';
     const rawData = parts[1] || parts[0];
     const byteCharacters = atob(rawData);
     const byteNumbers = new Array(byteCharacters.length);
@@ -208,5 +217,101 @@ export async function shareImageViaWhatsApp(options: WhatsAppImageShareOptions):
       ? 'تصویر کاپی ہو گئی ہے اور واٹس ایپ کھول دیا گیا ہے۔ چیٹ میں جا کر Ctrl+V (Paste) دبائیں!'
       : 'تصویر ڈاؤنلوڈ ہو گئی ہے اور واٹس ایپ کھول دیا گیا ہے۔ تصویر چیٹ میں بھیجیں۔',
     method: copied ? 'clipboard_and_url' : 'download_and_url'
+  };
+}
+
+/**
+ * Share a generated PDF data URI via WhatsApp across Capacitor, Web Share, or Desktop Web
+ */
+export async function sharePdfViaWhatsApp(options: WhatsAppPdfShareOptions): Promise<ShareResult> {
+  const { pdfDataUri, phone, caption = '', fileName = `Khaata_${Date.now()}` } = options;
+  if (!pdfDataUri) {
+    return { success: false, message: 'پی ڈی ایف فائل دستیاب نہیں ہے', method: 'url_only' };
+  }
+
+  const cleanFileName = fileName.replace(/[^a-zA-Z0-9_\u0600-\u06FF-]/g, '_');
+  const fullFileName = cleanFileName.endsWith('.pdf') ? cleanFileName : `${cleanFileName}.pdf`;
+  const { blob } = base64ToBlob(pdfDataUri);
+  const pdfBlob = new Blob([blob], { type: 'application/pdf' });
+
+  // 1. Capacitor Native Platform (Android / iOS)
+  if (Capacitor.isNativePlatform()) {
+    try {
+      const base64Data = pdfDataUri.includes(',') ? pdfDataUri.split(',')[1] : pdfDataUri;
+      const savedFile = await Filesystem.writeFile({
+        path: fullFileName,
+        data: base64Data,
+        directory: Directory.Cache,
+      });
+
+      await Share.share({
+        title: caption || fullFileName,
+        text: caption,
+        url: savedFile.uri,
+        dialogTitle: 'واٹس ایپ پر کھاتہ PDF شیئر کریں'
+      });
+
+      return {
+        success: true,
+        message: 'کھاتہ PDF کامیابی سے شیئر کر دی گئی ہے',
+        method: 'native_share'
+      };
+    } catch (e: any) {
+      console.error('Capacitor PDF share failed:', e);
+      const url = formatWhatsAppUrl(phone, caption);
+      if (url) window.open(url, '_blank');
+      return {
+        success: false,
+        message: 'براہ راست شیئرنگ میں مسئلہ آیا، واٹس ایپ لنک کھول دیا گیا ہے',
+        method: 'url_only'
+      };
+    }
+  }
+
+  // 2. Web Share API with Files support (Mobile Chrome, Safari, Android WebView)
+  if (typeof navigator !== 'undefined' && typeof navigator.canShare === 'function') {
+    try {
+      const file = new File([pdfBlob], fullFileName, { type: 'application/pdf' });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: fullFileName,
+          text: caption,
+        });
+        return {
+          success: true,
+          message: 'کھاتہ PDF کامیابی سے شیئر کر دی گئی ہے',
+          method: 'web_share'
+        };
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        return { success: false, message: 'شیئرنگ کینسل کر دی گئی', method: 'web_share' };
+      }
+      console.warn('Web share PDF failed, proceeding with desktop fallback:', e);
+    }
+  }
+
+  // 3. Desktop Web Fallback: download the PDF and open WhatsApp Web with summary caption
+  try {
+    const link = document.createElement('a');
+    link.href = pdfDataUri;
+    link.download = fullFileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } catch (e) {
+    console.error('Error downloading PDF for WhatsApp fallback:', e);
+  }
+
+  const waUrl = formatWhatsAppUrl(phone, caption);
+  if (waUrl) {
+    window.open(waUrl, '_blank');
+  }
+
+  return {
+    success: true,
+    message: 'مکمل کھاتہ PDF ڈاؤنلوڈ ہو گئی ہے اور واٹس ایپ کھول دیا گیا ہے۔ ڈاؤنلوڈ شدہ PDF فائل کو چیٹ میں اٹیچ کر کے بھیجیں!',
+    method: 'download_and_url'
   };
 }

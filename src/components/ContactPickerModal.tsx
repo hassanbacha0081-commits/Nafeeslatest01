@@ -20,6 +20,7 @@ export default function ContactPickerModal({ isOpen, onClose, onSelect, lang }: 
     const orders = await db.orders.toArray();
     const karigars = await db.karigars.toArray();
     const purchases = await db.goldPurchases.toArray();
+    const repairs = await db.repairs.toArray();
     const savedContacts = await db.contacts?.toArray() || [];
 
     const contactMap = new Map<string, { name: string; phone: string }>();
@@ -47,6 +48,11 @@ export default function ContactPickerModal({ isOpen, onClose, onSelect, lang }: 
     purchases.forEach(p => {
       if (p.name && p.phone && !contactMap.has(p.phone)) {
         contactMap.set(p.phone, { name: p.name, phone: p.phone });
+      }
+    });
+    repairs.forEach(r => {
+      if (r.customerName && r.customerPhone && !contactMap.has(r.customerPhone)) {
+        contactMap.set(r.customerPhone, { name: r.customerName, phone: r.customerPhone });
       }
     });
 

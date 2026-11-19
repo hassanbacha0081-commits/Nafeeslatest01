@@ -43,7 +43,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     oTotalWt: 0,
     oNetWt: 0,
     recAmt: 0,
-    discount: 0
+    discount: 0,
+    paidToCustomer: 0
   });
 
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -229,7 +230,9 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         iMazdori: 0,
         oTotalWt: 0,
         oNetWt: 0,
-        recAmt: editingSale.rec
+        recAmt: editingSale.rec,
+        discount: editingSale.discount || 0,
+        paidToCustomer: editingSale.paidToCustomer || 0
       });
       setBillItems(editingSale.items);
     } else {
@@ -266,7 +269,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       oTotalWt: 0,
       oNetWt: 0,
       recAmt: 0,
-      discount: 0
+      discount: 0,
+      paidToCustomer: 0
     });
   };
 
@@ -317,7 +321,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
   };
 
   const getRemainingAmount = () => {
-    return Math.round(getGrandTotal() - (formData.recAmt || 0) - (formData.discount || 0));
+    return Math.round(getGrandTotal() - (formData.recAmt || 0) - (formData.discount || 0) + (formData.paidToCustomer || 0));
   };
 
   const exportVCard = () => {
@@ -374,7 +378,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     const total = getGrandTotal();
     const rec = formData.recAmt || 0;
     const disc = formData.discount || 0;
-    const rem = Math.round(total - rec - disc);
+    const paidToCust = formData.paidToCustomer || 0;
+    const rem = Math.round(total - rec - disc + paidToCust);
     const data: Sale = {
       name: formData.cName || (lang === 'ur' ? "کسٹمر" : "Customer"),
       phone: formData.cPhone || "-",
@@ -382,6 +387,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       total: total,
       rec: rec,
       discount: disc,
+      paidToCustomer: paidToCust,
       rem: rem,
       date: editingSale ? editingSale.date : formatDate(new Date(), 'ur-PK')
     };
@@ -1022,6 +1028,19 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                     type="number"
                     value={formData.discount || ''}
                     onChange={e => setFormData({ ...formData, discount: Number(e.target.value) })}
+                    className="w-32 px-4 py-2 bg-white border border-sky-100 rounded-xl text-right font-black text-zinc-900 focus:ring-2 focus:ring-gold outline-none"
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-between items-center bg-sky-50 p-4 rounded-2xl border border-sky-100">
+                <span className="text-zinc-500 font-bold urdu-text">{lang === 'ur' ? 'گاہک کو ادا کیا گیا' : 'Paid to Customer (گاہک کو ادا کیا گیا)'}</span>
+                <div className="relative">
+                  <input
+                    type="number"
+                    value={formData.paidToCustomer || ''}
+                    onChange={e => setFormData({ ...formData, paidToCustomer: Number(e.target.value) })}
                     className="w-32 px-4 py-2 bg-white border border-sky-100 rounded-xl text-right font-black text-zinc-900 focus:ring-2 focus:ring-gold outline-none"
                     placeholder="0"
                   />

@@ -19,6 +19,7 @@ export interface Sale {
   total: number;
   rec: number;
   discount?: number;
+  paidToCustomer?: number;
   rem: number;
   date: string;
 }

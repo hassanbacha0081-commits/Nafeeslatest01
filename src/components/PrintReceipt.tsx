@@ -775,7 +775,20 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
               ) : (
                 order.payments.slice(0, 8).map((p, i) => (
                   <tr key={i}>
-                    <td className="font-nastaliq text-center" style={{ padding: '6px', fontSize: '14px' }}>قسط {i + 1}</td>
+                    <td className="font-nastaliq text-center" style={{ padding: '6px', fontSize: '14px' }}>
+                      {p.type === 'gold' ? (
+                        <div>
+                          <span>قسط {i + 1} (سونا: {p.goldWeight}g)</span>
+                          {(p.goldRatePerTola || p.goldRatePerGram) && (
+                            <span className="block text-[11px] font-mono text-zinc-500">
+                              @ {p.goldRatePerTola ? `${p.goldRatePerTola.toLocaleString()}/تولہ` : `${p.goldRatePerGram?.toLocaleString()}/g`}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <>قسط {i + 1}</>
+                      )}
+                    </td>
                     <td className="font-mono font-bold text-center" style={{ padding: '6px', fontSize: '14px' }}>{p.amt.toLocaleString()}</td>
                     <td className="font-mono text-center" style={{ padding: '6px', fontSize: '14px' }}>{p.date}</td>
                   </tr>

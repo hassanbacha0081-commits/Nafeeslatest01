@@ -27,6 +27,11 @@ export interface Sale {
 export interface OrderPayment {
   amt: number;
   date: string;
+  type?: 'cash' | 'gold';
+  goldWeight?: number;
+  goldRatePerTola?: number;
+  goldRatePerGram?: number;
+  tolaDivisor?: number;
 }
 
 export interface Order {

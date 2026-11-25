@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, type KhaataAccount, type Khaata } from '../db';
+import { db, sanitizeShopAddress, type KhaataAccount, type Khaata } from '../db';
 import { translations, type Language } from '../translations';
 import { Save, Download, Upload, Languages, Trash2, AlertTriangle, BadgeDollarSign, History, ShoppingBag, Palette, Sparkles, LayoutGrid, Coins, Check } from 'lucide-react';
 import { ConfirmModal } from './ConfirmModal';
@@ -47,6 +47,8 @@ export default function Settings({
   const [shiftXInput, setShiftXInput] = useState<string>('');
   const [shiftYInput, setShiftYInput] = useState<string>('');
   const [pinInput, setPinInput] = useState<string>('');
+  const [showPaymentQr, setShowPaymentQr] = useState<boolean>(true);
+  const [paymentQrPayloadInput, setPaymentQrPayloadInput] = useState<string>('');
   const [showConfirmClear, setShowConfirmClear] = useState(false);
   const [securityAction, setSecurityAction] = useState<{ nameUr: string, nameEn: string, onVerify: () => void } | null>(null);
 
@@ -79,17 +81,21 @@ export default function Settings({
       const shiftXData = await db.settings.get('printShiftX');
       const shiftYData = await db.settings.get('printShiftY');
       const appPinData = await db.settings.get('appPin');
+      const showQrData = await db.settings.get('showPaymentQr');
+      const qrPayloadData = await db.settings.get('paymentQrPayload');
       
       setCurrentSettings({
         goldRate: rateData?.value || 0,
         shopName: nameData?.value || translations[lang].shopName,
-        shopAddress: addressData?.value || translations[lang].shopAddress,
+        shopAddress: sanitizeShopAddress(addressData?.value || translations[lang].shopAddress),
         shopPhone: phoneData?.value || translations[lang].shopPhone,
         shopPhone2: phone2Data?.value || translations[lang].shopPhone2,
         printShiftX: shiftXData?.value || 0,
         printShiftY: shiftYData?.value || 0,
         appPin: appPinData?.value || ''
       });
+      setShowPaymentQr(showQrData?.value !== false);
+      setPaymentQrPayloadInput(qrPayloadData?.value || '');
     };
     fetchSettings();
   }, [lang]);
@@ -163,6 +169,9 @@ export default function Settings({
           await db.settings.put({ key: 'appPin', value: pinInput });
           setCurrentSettings(prev => ({ ...prev, appPin: pinInput }));
         }
+
+        await db.settings.put({ key: 'showPaymentQr', value: showPaymentQr });
+        await db.settings.put({ key: 'paymentQrPayload', value: paymentQrPayloadInput.trim() });
 
         setShopNameInput('');
         setShopAddressInput('');
@@ -941,6 +950,50 @@ export default function Settings({
                   )}
                 </div>
                 <p className="text-[10px] text-zinc-400">{lang === 'ur' ? 'ایپ کو کھولنے کے لیے پاس ورڈ سیٹ کریں' : 'Set a password to lock the application on startup.'}</p>
+              </div>
+
+              <div className="space-y-3 pt-4 border-t border-sky-100">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-zinc-700 urdu-text block">
+                      {lang === 'ur' ? 'رسید پر EasyPaisa / Raast ادائیگی QR' : 'EasyPaisa / Raast Payment QR on Receipts'}
+                    </label>
+                    <p className="text-[10px] text-zinc-400">
+                      {lang === 'ur'
+                        ? 'سیل، آرڈر اور ریپیئر رسید پر فوری ادائیگی کا QR کوڈ دکھائیں'
+                        : 'Show scannable EasyPaisa / Raast QR next to shop seal'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const next = !showPaymentQr;
+                      setShowPaymentQr(next);
+                      await db.settings.put({ key: 'showPaymentQr', value: next });
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 ${
+                      showPaymentQr ? 'bg-emerald-600 text-white shadow-sm' : 'bg-zinc-200 text-zinc-600'
+                    }`}
+                  >
+                    {showPaymentQr ? (lang === 'ur' ? 'آن (Active)' : 'ON') : (lang === 'ur' ? 'آف (Off)' : 'OFF')}
+                  </button>
+                </div>
+
+                {showPaymentQr && (
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-zinc-500 urdu-text">
+                      {lang === 'ur' ? 'کسٹم Raast IBAN / QR کوڈ (اختیاری)' : 'Custom Raast IBAN / Merchant QR String (Optional)'}
+                    </label>
+                    <input
+                      type="text"
+                      value={paymentQrPayloadInput}
+                      onChange={e => setPaymentQrPayloadInput(e.target.value)}
+                      placeholder={lang === 'ur' ? 'خالی چھوڑنے پر آپ کا اپ لوڈ کردہ EasyPaisa QR استعمال ہوگا' : 'Leave blank to use your uploaded EasyPaisa QR'}
+                      className="w-full px-4 py-2 bg-white border border-sky-200 rounded-lg focus:ring-2 focus:ring-gold outline-none text-xs font-mono text-black"
+                      dir="ltr"
+                    />
+                  </div>
+                )}
               </div>
 
               <button 

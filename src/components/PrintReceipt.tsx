@@ -1,9 +1,10 @@
 import React, { forwardRef, useState, useEffect } from 'react';
 import QRCode from 'qrcode';
-import { Sale, Order, Repair, KarigarRecord, StockItem, GoldPurchase, db } from '../db';
+import { Sale, Order, Repair, KarigarRecord, StockItem, GoldPurchase, db, sanitizeShopAddress } from '../db';
 import { formatDate } from '../lib/utils';
 import { translations } from '../translations';
 import { APP_CONFIG } from '../config';
+import { PhoneChannelLogos, EasyPaisaLogo } from './PhoneChannelLogos';
 
 // Luxury Royal Gold Authenticity Seal
 export const RoyalGoldSeal = ({ size = 88 }: { size?: number }) => (
@@ -54,6 +55,8 @@ interface PrintReceiptProps {
   showOrderStatus?: boolean;
 }
 
+const CLEAN_EASYPAISA_QR_PATH = '/assets/easypaisa-qr-clean.png';
+
 export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ type, data, id, showOrderStatus = true }, ref) => {
   const [shopSettings, setShopSettings] = useState({
     name: translations.ur.shopName,
@@ -62,6 +65,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
     phone2: translations.ur.shopPhone2
   });
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  const [showPaymentQr, setShowPaymentQr] = useState<boolean>(true);
+  const [paymentQrPayload, setPaymentQrPayload] = useState<string>('');
+  const [paymentQrUrl, setPaymentQrUrl] = useState<string>(CLEAN_EASYPAISA_QR_PATH);
 
   const getOrderStatusConfig = (status?: string) => {
     const s = (status || '').toLowerCase().trim();
@@ -116,12 +122,17 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
         ? phone2.value
         : translations.ur.shopPhone2;
 
+      const showQrSetting = await db.settings.get('showPaymentQr');
+      const qrPayloadSetting = await db.settings.get('paymentQrPayload');
+
       setShopSettings({
         name: resolvedName,
-        address: address?.value || translations.ur.shopAddress,
+        address: sanitizeShopAddress(address?.value || translations.ur.shopAddress),
         phone: resolvedPhone,
         phone2: resolvedPhone2
       });
+      setShowPaymentQr(showQrSetting?.value !== false);
+      setPaymentQrPayload(qrPayloadSetting?.value || '');
     };
     fetchSettings();
   }, []);
@@ -199,6 +210,39 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
     generateQR();
     return () => { active = false; };
   }, [type, data, id]);
+
+  // Load clean 444x444 EasyPaisa QR PNG asset (or custom payload with 4-module quiet zone if overridden in Settings)
+  useEffect(() => {
+    let active = true;
+    const generatePayQR = async () => {
+      if (!showPaymentQr || (type !== 'sale' && type !== 'order' && type !== 'repair')) {
+        if (active) setPaymentQrUrl('');
+        return;
+      }
+      try {
+        const customPayload = paymentQrPayload.trim();
+        if (customPayload) {
+          const url = await QRCode.toDataURL(customPayload, {
+            width: 280,
+            margin: 4,
+            errorCorrectionLevel: 'M',
+            color: {
+              dark: '#000000',
+              light: '#ffffff'
+            }
+          });
+          if (active) setPaymentQrUrl(url);
+        } else {
+          if (active) setPaymentQrUrl(CLEAN_EASYPAISA_QR_PATH);
+        }
+      } catch (err) {
+        console.error('Payment QR generation failed:', err);
+        if (active) setPaymentQrUrl(CLEAN_EASYPAISA_QR_PATH);
+      }
+    };
+    generatePayQR();
+    return () => { active = false; };
+  }, [showPaymentQr, paymentQrPayload, type]);
 
   const isPurchase = type === 'purchase';
   const isOrder = type === 'order';
@@ -424,10 +468,12 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
         .terms {
           clear: both;
           margin-top: ${isPurchase ? '40px' : '15px'};
-          font-size: ${isPurchase ? '12.5px' : '10.5px'};
+          font-size: ${isA4 ? '14px' : '13px'};
+          font-weight: 700;
+          color: #18181b;
           border-top: 1px solid #ccc;
           padding-top: ${isPurchase ? '15px' : '8px'};
-          line-height: ${isPurchase ? '1.8' : '1.5'};
+          line-height: 1.85;
         }
 
         .font-nastaliq {
@@ -478,7 +524,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           <p className="text-lg m-1 font-nastaliq text-zinc-600">{shopSettings.address}</p>
           <div className="header-phone" dir="ltr">
             <div className="phone-brand-box">
-              
+              {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                <PhoneChannelLogos size={15} />
+              )}
               <span className="phone-number">{shopSettings.phone}</span>
             </div>
             {shopSettings.phone2 && (
@@ -564,9 +612,28 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           </table>
 
           <div className="flex justify-between items-end mt-4 gap-4" dir="ltr">
-            {/* Left side: Royal Gold Authenticity Stamp */}
-            <div className="flex items-center gap-2 bg-amber-50/70 p-2.5 rounded-xl border border-amber-200/90 shadow-xs">
-              <RoyalGoldSeal size={82} />
+            {/* Left side: EasyPaisa / Payment QR code */}
+            <div className="flex items-end gap-2">
+              {showPaymentQr && paymentQrUrl && (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-400 shadow-sm" style={{ background: '#ffffff', padding: '6px 7px 7px 7px' }}>
+                  <img
+                    src={paymentQrUrl}
+                    alt="EasyPaisa QR"
+                    style={{
+                      width: '124px',
+                      height: '124px',
+                      objectFit: 'contain',
+                      display: 'block',
+                      background: '#ffffff',
+                      imageRendering: 'pixelated'
+                    }}
+                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <EasyPaisaLogo size={13} />
+                    <span className="text-[10px] font-black text-emerald-950 tracking-tight">EasyPaisa • 03150023776</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right side: Total balance / Receive amount summary box */}
@@ -612,9 +679,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </table>
           </div>
 
-          <div className="flex justify-between items-start terms-container border-t border-zinc-300 pt-3 mt-4">
-            <div className="terms font-nastaliq" style={{ border: 'none', marginTop: 0, paddingTop: 0, width: '70%' }}>
-              <b>شرائط و ضوابط:</b><br />
+          <div className="flex justify-between items-start terms-container border-t-2 border-zinc-300 pt-3 mt-4">
+            <div className="terms font-nastaliq font-bold text-zinc-900" style={{ border: 'none', marginTop: 0, paddingTop: 0, width: '70%', fontSize: '13px', fontWeight: 700, lineHeight: '1.85', color: '#18181b' }}>
+              <b style={{ fontSize: '15px', fontWeight: 900, color: '#996515' }}>شرائط و ضوابط:</b><br />
               1۔ زیورات کی واپسی پر 25% کاٹ لیا جائے گا۔<br />
               2۔ کسٹمر اپنا تیار سامان 1 ہفتہ کے اندر وصول کرنے کا پابند ہوگا۔<br />
               3۔ تیار شدہ سامان چھوڑنے پر 20% کاٹ لیا جائے گا۔<br />
@@ -661,6 +728,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             <p className="text-lg m-1 font-nastaliq text-zinc-600" style={{ fontSize: '15px' }}>{shopSettings.address}</p>
             <div className="header-phone" dir="ltr">
               <div className="phone-brand-box">
+                {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                  <PhoneChannelLogos size={15} />
+                )}
                 <span className="phone-number" style={{ fontSize: '16px' }}>{shopSettings.phone}</span>
               </div>
               {shopSettings.phone2 && (
@@ -798,9 +868,28 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           </table>
 
           <div className="flex justify-between items-end mt-3 gap-6" dir="ltr">
-            {/* Left side: Royal Gold Authenticity Stamp */}
-            <div className="flex items-center gap-3 bg-amber-50/70 p-3 rounded-xl border border-amber-200/90 shadow-xs">
-              <RoyalGoldSeal size={86} />
+            {/* Left side: EasyPaisa / Payment QR code */}
+            <div className="flex items-end gap-3">
+              {showPaymentQr && paymentQrUrl && (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-400 shadow-sm" style={{ background: '#ffffff', padding: '6px 7px 7px 7px' }}>
+                  <img
+                    src={paymentQrUrl}
+                    alt="EasyPaisa QR"
+                    style={{
+                      width: '135px',
+                      height: '135px',
+                      objectFit: 'contain',
+                      display: 'block',
+                      background: '#ffffff',
+                      imageRendering: 'pixelated'
+                    }}
+                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <EasyPaisaLogo size={13} />
+                    <span className="text-[10px] font-black text-emerald-950 tracking-tight">EasyPaisa • 03150023776</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right side: Total balance / Receive amount summary box */}
@@ -842,9 +931,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </table>
           </div>
 
-          <div className="flex justify-between items-start terms-container border-t border-zinc-300 pt-3 mt-4">
-            <div className="terms font-nastaliq" style={{ border: 'none', marginTop: 0, paddingTop: 0, width: '68%', fontSize: '11px', lineHeight: '1.7' }}>
-              <b>شرائط و ضوابط:</b><br />
+          <div className="flex justify-between items-start terms-container border-t-2 border-zinc-300 pt-3 mt-4">
+            <div className="terms font-nastaliq font-bold text-zinc-900" style={{ border: 'none', marginTop: 0, paddingTop: 0, width: '68%', fontSize: '14px', fontWeight: 700, lineHeight: '1.85', color: '#18181b' }}>
+              <b style={{ fontSize: '16px', fontWeight: 900, color: '#996515' }}>شرائط و ضوابط:</b><br />
               1۔ زیورات کی واپسی پر 25% کاٹ لیا جائے گا۔<br />
               2۔ کسٹمر اپنا تیار سامان 1 ہفتہ کے اندر وصول کرنے کا پابند ہوگا۔<br />
               3۔ تیار شدہ سامان چھوڑنے پر 20% کاٹ لیا جائے گا۔<br />
@@ -886,7 +975,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             <p className="text-lg m-1 font-nastaliq text-zinc-600">{shopSettings.address}</p>
             <div className="header-phone" dir="ltr">
               <div className="phone-brand-box">
-                
+                {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                  <PhoneChannelLogos size={15} />
+                )}
                 <span className="phone-number">{shopSettings.phone}</span>
               </div>
               {shopSettings.phone2 && (
@@ -936,9 +1027,28 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           )}
 
           <div className="flex justify-between items-end mt-4 gap-4" dir="ltr">
-            {/* Left side: Royal Gold Authenticity Stamp */}
-            <div className="flex items-center gap-2 bg-amber-50/70 p-2 rounded-xl border border-amber-200/90 shadow-xs">
-              <RoyalGoldSeal size={74} />
+            {/* Left side: EasyPaisa / Payment QR code */}
+            <div className="flex items-end gap-2">
+              {showPaymentQr && paymentQrUrl && (
+                <div className="flex flex-col items-center justify-center rounded-xl border border-emerald-400 shadow-sm" style={{ background: '#ffffff', padding: '6px 7px 7px 7px' }}>
+                  <img
+                    src={paymentQrUrl}
+                    alt="EasyPaisa QR"
+                    style={{
+                      width: '124px',
+                      height: '124px',
+                      objectFit: 'contain',
+                      display: 'block',
+                      background: '#ffffff',
+                      imageRendering: 'pixelated'
+                    }}
+                  />
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <EasyPaisaLogo size={13} />
+                    <span className="text-[10px] font-black text-emerald-950 tracking-tight">EasyPaisa • 03150023776</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Right side: Total charges box */}
@@ -952,9 +1062,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </table>
           </div>
 
-          <div className="flex justify-between items-start terms-container border-t border-zinc-300 pt-3 mt-4">
-            <p className="text-[12px] font-nastaliq text-zinc-600 w-[68%]">
-              * ریپیئرنگ کے دوران کسی بھی قسم کے نقصان کی صورت میں دکان ذمہ دار نہیں ہوگی۔ تمام کام ماہر کاریگروں کے ذریعے تسلی بخش کیا جاتا ہے۔
+          <div className="flex justify-between items-start terms-container border-t-2 border-zinc-300 pt-3 mt-4">
+            <p className="terms font-nastaliq font-bold text-zinc-900" style={{ border: 'none', marginTop: 0, paddingTop: 0, width: '68%', fontSize: '13.5px', fontWeight: 700, lineHeight: '1.85', color: '#18181b' }}>
+              <b style={{ fontSize: '15px', fontWeight: 900, color: '#996515' }}>شرائط و ضوابط:</b> * ریپیئرنگ کے دوران کسی بھی قسم کے نقصان کی صورت میں دکان ذمہ دار نہیں ہوگی۔ تمام کام ماہر کاریگروں کے ذریعے تسلی بخش کیا جاتا ہے۔
             </p>
             <div className="w-[28%] flex flex-col items-center justify-end text-center pr-2" dir="ltr" style={{ minHeight: '50px' }}>
               <div className="border-b-2 border-dashed border-amber-900/60 w-full mb-2"></div>
@@ -989,7 +1099,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             <p className="text-lg m-1 font-nastaliq text-zinc-600">{shopSettings.address}</p>
             <div className="header-phone" dir="ltr">
               <div className="phone-brand-box">
-                
+                {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                  <PhoneChannelLogos size={15} />
+                )}
                 <span className="phone-number">{shopSettings.phone}</span>
               </div>
               {shopSettings.phone2 && (
@@ -1091,7 +1203,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             <p className="text-lg m-1 font-nastaliq text-zinc-600">{shopSettings.address}</p>
             <div className="header-phone" dir="ltr">
               <div className="phone-brand-box">
-                
+                {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                  <PhoneChannelLogos size={15} />
+                )}
                 <span className="phone-number">{shopSettings.phone}</span>
               </div>
               {shopSettings.phone2 && (
@@ -1172,7 +1286,9 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           <p className="text-lg m-1 font-nastaliq text-zinc-600">{shopSettings.address}</p>
           <div className="header-phone" dir="ltr">
             <div className="phone-brand-box">
-              
+              {(!shopSettings.phone || shopSettings.phone.replace(/\D/g, '').includes('3150023776')) && (
+                <PhoneChannelLogos size={17} />
+              )}
               <span className="phone-number">{shopSettings.phone}</span>
             </div>
             {shopSettings.phone2 && (

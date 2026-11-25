@@ -201,10 +201,28 @@ export class MyDatabase extends Dexie {
 const db = new MyDatabase();
 
 // Safety: Ensure tables are accessible even if shortcut properties are delayed
+export function sanitizeShopAddress(addr: string): string {
+  if (!addr) return addr;
+  return addr
+    .replace(/عبداللہ/g, 'عبدل اے')
+    .replace(/abdullah/gi, 'Abdul A');
+}
+
 export { db };
 
-db.on('ready', () => {
+db.on('ready', async () => {
   console.log('Database is ready');
+  try {
+    const savedAddress = await db.settings.get('shopAddress');
+    if (savedAddress && typeof savedAddress.value === 'string') {
+      const sanitized = sanitizeShopAddress(savedAddress.value);
+      if (sanitized !== savedAddress.value) {
+        await db.settings.put({ key: 'shopAddress', value: sanitized });
+      }
+    }
+  } catch (err) {
+    console.error('Failed to migrate shopAddress:', err);
+  }
 });
 
 db.open().catch((err) => {

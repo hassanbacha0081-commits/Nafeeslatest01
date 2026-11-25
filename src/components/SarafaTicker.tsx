@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { db } from '../db';
 import { type Language } from '../translations';
-import { Coins, TrendingUp, Edit3, X, Check, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
+import { showToast } from '../lib/toast';
+import { Coins, Edit3, X, Check, Sparkles, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface SarafaTickerProps {
   baseRate: number; // 24K gold rate per tola
@@ -18,8 +19,32 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
   const [inputRate, setInputRate] = useState<string>('');
   const [silverInput, setSilverInput] = useState<string>('3250');
   const [silverRate, setSilverRate] = useState<number>(3250);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('nafees_sarafa_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  useEffect(() => {
+    db.settings.get('silverRate').then((s) => {
+      if (s?.value && !isNaN(Number(s.value))) {
+        setSilverRate(Number(s.value));
+      }
+    }).catch(() => {});
+  }, []);
+
+  const toggleCollapse = () => {
+    const next = !isCollapsed;
+    setIsCollapsed(next);
+    try {
+      localStorage.setItem('nafees_sarafa_collapsed', String(next));
+    } catch {
+      // ignore
+    }
+  };
 
   // Conversion factor based on unit
   // Default baseRate is assumed to be Per Tola (11.664 grams)
@@ -53,7 +78,7 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
   const handleSaveRate = async () => {
     const num = Number(inputRate);
     if (isNaN(num) || num <= 0) {
-      alert(isUrdu ? 'براہ کرم درست ریٹ درج کریں' : 'Please enter a valid rate');
+      showToast(isUrdu ? 'براہ کرم درست ریٹ درج کریں' : 'Please enter a valid rate', 'warning');
       return;
     }
 
@@ -65,13 +90,14 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
       }
       onRateChange(num);
       setSaveSuccess(true);
+      showToast(isUrdu ? 'نیا صرافہ ریٹ محفوظ ہو گیا!' : 'Sarafa gold rate updated!', 'success');
       setTimeout(() => {
         setSaveSuccess(false);
         setIsModalOpen(false);
-      }, 700);
+      }, 450);
     } catch (e) {
       console.error(e);
-      alert('Error saving rate');
+      showToast(isUrdu ? 'ریٹ محفوظ کرنے میں خرابی' : 'Error saving rate', 'error');
     }
   };
 
@@ -82,33 +108,30 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
   };
 
   return (
-    <div className="w-full mb-6">
-      <div className="relative overflow-hidden rounded-2xl border border-gold/40 shadow-xl bg-gradient-to-r from-zinc-900 via-zinc-950 to-zinc-900 text-white transition-all duration-300">
-        {/* Top Glowing Metallic Gold Accent Line */}
-        <div className="h-1 w-full gold-metallic-bg" />
+    <div className="w-full mb-5 no-print">
+      <div className="relative overflow-hidden rounded-2xl border border-gold/30 shadow-lg bg-gradient-to-r from-zinc-900 via-zinc-950 to-zinc-900 text-white transition-colors duration-200">
+        {/* Top Metallic Gold Accent Line */}
+        <div className="h-0.5 w-full gold-metallic-bg" />
 
         {/* Bar Header Content */}
-        <div className="p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
           {/* Brand & Market Status */}
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-700 p-0.5 shadow-md shadow-amber-500/20 flex items-center justify-center shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-700 p-0.5 shadow-sm flex items-center justify-center shrink-0">
               <div className="w-full h-full bg-zinc-950 rounded-[10px] flex items-center justify-center">
-                <Coins className="text-amber-400" size={20} />
+                <Coins className="text-amber-400" size={18} />
               </div>
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <span className="font-black text-sm sm:text-base urdu-text gold-metallic-text tracking-wide">
-                  {isUrdu ? 'صرافہ مارکیٹ لائیو ریٹ بورڈ' : 'Official Sarafa Bullion Board'}
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-bold text-sm sm:text-base urdu-text gold-metallic-text tracking-wide">
+                  {isUrdu ? 'صرافہ مارکیٹ ریٹ بورڈ' : 'Sarafa Bullion Board'}
                 </span>
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                  {isUrdu ? 'آج کا ریٹ' : 'Live'}
+                <span className="text-zinc-500 text-xs" aria-hidden="true">·</span>
+                <span className="text-xs font-mono font-bold text-amber-300 tabular-nums">
+                  24K: Rs. {rate24K.toLocaleString()} ({getUnitLabel()})
                 </span>
               </div>
-              <p className="text-[11px] text-zinc-400 font-medium urdu-text">
-                {isUrdu ? `حالیہ پیمائش: ${getUnitLabel()}` : `Current unit: ${getUnitLabel()}`}
-              </p>
             </div>
           </div>
 
@@ -165,9 +188,9 @@ export default function SarafaTicker({ baseRate, lang, onRateChange }: SarafaTic
             {/* Toggle Collapse */}
             <button
               type="button"
-              onClick={() => setIsCollapsed(!isCollapsed)}
-              className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
-              title={isCollapsed ? 'Show' : 'Hide'}
+              onClick={toggleCollapse}
+              className="p-1.5 rounded-xl bg-zinc-800 text-zinc-400 hover:text-white transition-colors cursor-pointer"
+              title={isCollapsed ? (isUrdu ? 'دکھائیں' : 'Show') : (isUrdu ? 'چھپائیں' : 'Hide')}
             >
               {isCollapsed ? <ChevronDown size={16} /> : <ChevronUp size={16} />}
             </button>

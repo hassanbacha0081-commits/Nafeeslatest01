@@ -1,10 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type Sale, type GoldPurchase } from '../db';
 import { translations, type Language } from '../translations';
 import { Search, Printer, Trash2, Edit, MessageCircle, X, AlertTriangle, History, Download, AlertCircle, ShoppingCart, Tag, Eye, EyeOff, Check, Scale, Sparkles, Hammer, Filter, Camera } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { formatWhatsAppUrl } from '../lib/utils';
+import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { showToast } from '../lib/toast';
 import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -30,9 +32,15 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
   const t = translations[lang];
   const isUrdu = lang === 'ur';
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 150);
   const [activeTab, setActiveTab] = useState<'sales' | 'purchases'>('sales');
   const [filterStatus, setFilterStatus] = useState<'all' | 'baqaya' | 'clear'>('all');
   const [showSummary, setShowSummary] = useState(true);
+  const [visibleLimit, setVisibleLimit] = useState(40);
+
+  useEffect(() => {
+    setVisibleLimit(40);
+  }, [debouncedSearch, activeTab, filterStatus]);
 
   const [printData, setPrintData] = useState<{ data: Sale | GoldPurchase, id: number, type: 'sale' | 'purchase' } | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
@@ -70,6 +78,14 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
     }
   };
 
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (showPrintPreview && previewScrollRef.current) {
+      previewScrollRef.current.scrollTop = 0;
+    }
+  }, [showPrintPreview]);
+
   const generatePDF = async (data: any, id: number, type: 'sale' | 'purchase'): Promise<string | null> => {
     if (!printRef.current) return null;
     setIsPrinting(true);
@@ -81,6 +97,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
 
     try {
       window.scrollTo(0, 0);
+      if (previewScrollRef.current) previewScrollRef.current.scrollTop = 0;
       
       const canvas = await html2canvas(printRef.current, {
         scale: 3.0, // 1.0x avoids sub-pixel scaling calculations and is faster
@@ -109,7 +126,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
           }
         }
       });
-      const imgData = canvas.toDataURL('image/jpeg', 0.8); // JPEG encoding is significantly faster than PNG
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // High quality preserves crisp QR edges
 
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
@@ -150,7 +167,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
         });
       } catch (e) {
         console.error('Error sharing PDF', e);
-        alert(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file");
+        showToast(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file", 'error');
       }
     } else {
       const link = document.createElement('a');
@@ -162,69 +179,79 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
 
   const rawSales = useLiveQuery(() => {
     if (!db.sales) return Promise.resolve([]);
-    if (!searchTerm) return db.sales.orderBy('id').reverse().toArray();
+    if (!debouncedSearch) return db.sales.orderBy('id').reverse().toArray();
     
-    const term = searchTerm.toLowerCase();
+    const term = debouncedSearch.toLowerCase();
     return db.sales
       .filter(sale => 
-        sale.name.toLowerCase().includes(term) || 
-        sale.phone.includes(searchTerm) ||
-        sale.id?.toString() === searchTerm ||
-        sale.items.some(item => item.n.toLowerCase().includes(term))
+        (sale.name || '').toLowerCase().includes(term) || 
+        (sale.phone || '').includes(debouncedSearch) ||
+        sale.id?.toString() === debouncedSearch ||
+        (sale.items || []).some(item => (item.n || '').toLowerCase().includes(term))
       )
       .reverse()
       .toArray();
-  }, [searchTerm]);
+  }, [debouncedSearch]);
 
-  const allSalesCount = rawSales?.length || 0;
-  const baqayaCount = rawSales?.filter(s => s.rem > 0).length || 0;
-  const clearCount = rawSales?.filter(s => s.rem <= 0).length || 0;
-
-  const sales = (rawSales || []).filter(sale => {
-    if (filterStatus === 'baqaya') return sale.rem > 0;
-    if (filterStatus === 'clear') return sale.rem <= 0;
-    return true;
-  });
-
-  // Calculate totals across the active/filtered sales list: total weight, total polish, total mazdori
-  const salesTotals = (sales || []).reduce((acc, sale) => {
-    let billWeight = 0;
-    let billPolish = 0;
-    let billMazdori = 0;
-
-    (sale.items || []).forEach(item => {
-      // Normal sale items weight
-      if (item.t >= 0) {
-        billWeight += (Number(item.w) || 0);
-      }
-      billPolish += (Number(item.mk) || 0);
-      const mz = item.mz !== undefined ? Number(item.mz) : Math.max(0, Math.round(item.t - (item.w + (item.mk || 0)) * item.r));
-      billMazdori += mz;
+  const { allSalesCount, baqayaCount, clearCount, sales, salesTotals } = useMemo(() => {
+    const list = rawSales || [];
+    const baqaya = list.filter(s => s.rem > 0).length;
+    const clear = list.filter(s => s.rem <= 0).length;
+    const filtered = list.filter(sale => {
+      if (filterStatus === 'baqaya') return sale.rem > 0;
+      if (filterStatus === 'clear') return sale.rem <= 0;
+      return true;
     });
 
-    acc.weight += billWeight;
-    acc.polish += billPolish;
-    acc.mazdori += billMazdori;
-    acc.total += (sale.total || 0);
-    acc.rec += (sale.rec || 0);
-    acc.rem += (sale.rem || 0);
-    return acc;
-  }, { weight: 0, polish: 0, mazdori: 0, total: 0, rec: 0, rem: 0 });
+    const totals = filtered.reduce((acc, sale) => {
+      let billWeight = 0;
+      let billPolish = 0;
+      let billMazdori = 0;
+
+      (sale.items || []).forEach(item => {
+        if (item.t >= 0) {
+          billWeight += (Number(item.w) || 0);
+        }
+        billPolish += (Number(item.mk) || 0);
+        const mz = item.mz !== undefined ? Number(item.mz) : Math.max(0, Math.round(item.t - (item.w + (item.mk || 0)) * item.r));
+        billMazdori += mz;
+      });
+
+      acc.weight += billWeight;
+      acc.polish += billPolish;
+      acc.mazdori += billMazdori;
+      acc.total += (sale.total || 0);
+      acc.rec += (sale.rec || 0);
+      acc.rem += (sale.rem || 0);
+      return acc;
+    }, { weight: 0, polish: 0, mazdori: 0, total: 0, rec: 0, rem: 0 });
+
+    return {
+      allSalesCount: list.length,
+      baqayaCount: baqaya,
+      clearCount: clear,
+      sales: filtered,
+      salesTotals: totals,
+    };
+  }, [rawSales, filterStatus]);
 
   const purchases = useLiveQuery(() => {
     if (!db.goldPurchases) return Promise.resolve([]);
-    if (!searchTerm) return db.goldPurchases.orderBy('id').reverse().toArray();
+    if (!debouncedSearch) return db.goldPurchases.orderBy('id').reverse().toArray();
     
-    const term = searchTerm.toLowerCase();
+    const term = debouncedSearch.toLowerCase();
     return db.goldPurchases
       .filter(p => 
-        p.name.toLowerCase().includes(term) || 
-        p.phone.includes(searchTerm) ||
-        p.id?.toString() === searchTerm
+        (p.name || '').toLowerCase().includes(term) || 
+        (p.phone || '').includes(debouncedSearch) ||
+        p.id?.toString() === debouncedSearch
       )
       .reverse()
       .toArray();
-  }, [searchTerm]);
+  }, [debouncedSearch]);
+
+  const visibleSales = useMemo(() => sales.slice(0, visibleLimit), [sales, visibleLimit]);
+  const visiblePurchases = useMemo(() => (purchases || []).slice(0, visibleLimit), [purchases, visibleLimit]);
 
   const handleDelete = async () => {
     if (!deleteId) return;
@@ -323,7 +350,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-4 bg-zinc-200 flex justify-center scrollbar-thin scrollbar-thumb-zinc-400">
+            <div ref={previewScrollRef} className="flex-1 overflow-y-auto p-4 bg-zinc-200 flex justify-center scrollbar-thin scrollbar-thumb-zinc-400">
               <div className="bg-white shadow-2xl origin-top transition-transform duration-300 transform scale-[0.6] sm:scale-[0.75] md:scale-[0.85] lg:scale-100">
                 <PrintReceipt 
                   ref={printRef}
@@ -575,7 +602,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
             exit={{ opacity: 0, x: 20 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            {sales?.map((sale) => {
+            {visibleSales.map((sale) => {
               const billWeight = (sale.items || []).reduce((sum, item) => item.t >= 0 ? sum + (Number(item.w) || 0) : sum, 0);
               const billPolish = (sale.items || []).reduce((sum, item) => sum + (Number(item.mk) || 0), 0);
               const billMazdori = (sale.items || []).reduce((sum, item) => {
@@ -590,16 +617,15 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
                 className={`bg-white rounded-xl shadow-sm border overflow-hidden hover:shadow-md transition-shadow ${
                   isClear ? 'border-emerald-200' : 'border-red-200'
                 }`}
-                style={{ borderTop: `4px solid ${isClear ? '#10b981' : '#ef4444'}` }}
               >
                 <div className="p-5 space-y-3">
                   <div className="flex justify-between items-start gap-2">
                     <div>
                       <h3 className="text-lg font-bold text-zinc-900 urdu-text">{sale.name}</h3>
-                      <p className="text-xs text-zinc-500" dir="ltr">{sale.phone}</p>
+                      <p className="text-xs text-zinc-500 font-mono tabular-nums" dir="ltr">{sale.phone}</p>
                     </div>
                     <div className="flex flex-col items-end gap-1">
-                      <div className="px-2 py-0.5 bg-sky-50 text-gold-dark rounded text-[10px] font-bold border border-gold-20">
+                      <div className="px-2 py-0.5 bg-sky-50 text-gold-dark rounded text-[10px] font-bold border border-gold-20 font-mono">
                         #{sale.id}
                       </div>
                       {/* Prominent Baqaya / Clear Label */}
@@ -610,7 +636,6 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-black bg-red-100 text-red-700 border border-red-300 urdu-text shadow-xs">
-                          <span className="w-1.5 h-1.5 rounded-full bg-red-600 animate-pulse"></span>
                           {isUrdu ? 'بقایا' : 'Baqaya'}
                         </span>
                       )}
@@ -735,7 +760,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
                         setPdfUrl(url);
                       } else {
                         setShowPrintPreview(false);
-                        alert('PDF generation failed. Please try again or check the image format.');
+                        showToast(isUrdu ? 'پی ڈی ایف بنانے میں خرابی پیش آئی' : 'PDF generation failed. Please try again.', 'error');
                       }
                           }, 400);
                         }
@@ -790,7 +815,20 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
               </div>
             );
           })}
-            {sales?.length === 0 && <EmptyState lang={lang} />}
+            {sales.length > visibleLimit && (
+              <div className="col-span-full flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((n) => n + 40)}
+                  className="px-6 py-3 rounded-xl bg-white border border-sky-200 text-sky-800 font-bold text-sm hover:bg-sky-50 transition-colors shadow-sm cursor-pointer urdu-text"
+                >
+                  {isUrdu
+                    ? `مزید بل دیکھیں (${sales.length - visibleLimit} باقی)`
+                    : `Show More Bills (${sales.length - visibleLimit} remaining)`}
+                </button>
+              </div>
+            )}
+            {sales.length === 0 && <EmptyState lang={lang} />}
           </motion.div>
         ) : (
           <motion.div 
@@ -800,7 +838,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
             exit={{ opacity: 0, x: -20 }}
             className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"
           >
-            {purchases?.map((p) => (
+            {visiblePurchases.map((p) => (
               <div
                 key={p.id}
                 className="bg-white rounded-xl shadow-sm border border-sky-200 overflow-hidden hover:shadow-md transition-shadow"
@@ -882,7 +920,7 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
                         setPdfUrl(url);
                       } else {
                         setShowPrintPreview(false);
-                        alert('PDF generation failed. Please try again or check the image format.');
+                        showToast(isUrdu ? 'پی ڈی ایف بنانے میں خرابی پیش آئی' : 'PDF generation failed. Please try again.', 'error');
                       }
                           }, 400);
                         }
@@ -908,6 +946,19 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
                 </div>
               </div>
             ))}
+            {(purchases?.length || 0) > visibleLimit && (
+              <div className="col-span-full flex justify-center pt-2">
+                <button
+                  type="button"
+                  onClick={() => setVisibleLimit((n) => n + 40)}
+                  className="px-6 py-3 rounded-xl bg-white border border-sky-200 text-sky-800 font-bold text-sm hover:bg-sky-50 transition-colors shadow-sm cursor-pointer urdu-text"
+                >
+                  {isUrdu
+                    ? `مزید خریداری دیکھیں (${(purchases?.length || 0) - visibleLimit} باقی)`
+                    : `Show More Purchases (${(purchases?.length || 0) - visibleLimit} remaining)`}
+                </button>
+              </div>
+            )}
             {purchases?.length === 0 && <EmptyState lang={lang} />}
           </motion.div>
         )}

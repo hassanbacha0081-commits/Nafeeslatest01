@@ -15,7 +15,9 @@ import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 import JewelryTagModal from './JewelryTagModal';
 import ImageLightbox from './ImageLightbox';
-import { gramsToTolaMashaRatti } from '../lib/utils';
+import { gramsToTolaMashaRatti, compressImage } from '../lib/utils';
+import { useDebouncedValue } from '../lib/useDebouncedValue';
+import { showToast } from '../lib/toast';
 
 interface StockProps {
   lang: Language;
@@ -157,7 +159,7 @@ export default function Stock({ lang }: StockProps) {
         });
       } catch (e) {
         console.error('Error sharing PDF', e);
-        alert(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file");
+        showToast(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file", 'error');
       }
     } else {
       const link = document.createElement('a');
@@ -168,26 +170,29 @@ export default function Stock({ lang }: StockProps) {
   };
 
   const [searchTerm, setSearchTerm] = useState('');
+  const debouncedSearch = useDebouncedValue(searchTerm, 150);
   const stock = useLiveQuery(() => {
     if (!db.stock) return Promise.resolve([]);
-    if (!searchTerm) return db.stock.toArray();
+    if (!debouncedSearch) return db.stock.toArray();
     
-    const term = searchTerm.toLowerCase();
+    const term = debouncedSearch.toLowerCase();
     return db.stock
       .filter(s => 
         s.name.toLowerCase().includes(term) || 
         s.type.toLowerCase().includes(term) ||
-        s.id?.toString() === searchTerm
+        s.id?.toString() === debouncedSearch
       )
       .toArray();
-  }, [searchTerm]);
+  }, [debouncedSearch]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setCurrentImg(event.target?.result as string);
+      reader.onload = async (event) => {
+        const raw = event.target?.result as string;
+        const compressed = await compressImage(raw, 800, 800, 0.72);
+        setCurrentImg(compressed);
       };
       reader.readAsDataURL(file);
     }

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { db, type GoldPurchase } from '../db';
+import { db, sanitizeShopAddress, type GoldPurchase } from '../db';
 import { translations, type Language } from '../translations';
 import { Save, Printer, Camera, RotateCcw, Image as ImageIcon, Users, Plus } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
@@ -10,6 +10,8 @@ import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 
 import { APP_CONFIG } from '../config';
+import { compressImage } from '../lib/utils';
+import { showToast } from '../lib/toast';
 
 interface PurchasesProps {
   lang: Language;
@@ -142,7 +144,7 @@ export default function Purchases({ lang }: PurchasesProps) {
     const sPhone = await db.settings.get('shopPhone');
     const sPhone2 = await db.settings.get('shopPhone2');
     if (sName) setShopName(sName.value);
-    if (sAddr) setShopAddress(sAddr.value);
+    if (sAddr) setShopAddress(sanitizeShopAddress(sAddr.value));
     if (sPhone) setShopPhone(sPhone.value);
     if (sPhone2) setShopPhone2(sPhone2.value);
   };
@@ -151,8 +153,10 @@ export default function Purchases({ lang }: PurchasesProps) {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImg(reader.result as string);
+      reader.onloadend = async () => {
+        const raw = reader.result as string;
+        const compressed = await compressImage(raw, 800, 800, 0.72);
+        setImg(compressed);
       };
       reader.readAsDataURL(file);
     }
@@ -183,14 +187,14 @@ export default function Purchases({ lang }: PurchasesProps) {
   const handleSave = async () => {
     try {
       if (!name.trim()) {
-        alert("Please enter seller name.");
+        showToast(isUrdu ? "براہ کرم بیچنے والے کا نام درج کریں" : "Please enter seller name.", 'warning');
         return;
       }
       const w = parseFloat(weight);
       const r = parseFloat(rate);
       
       if (isNaN(w) || w <= 0 || isNaN(r) || r <= 0) {
-        alert("Please enter valid weight and rate.");
+        showToast(isUrdu ? "براہ کرم درست وزن اور ریٹ درج کریں" : "Please enter valid weight and rate.", 'warning');
         return;
       }
 
@@ -211,10 +215,10 @@ export default function Purchases({ lang }: PurchasesProps) {
       localStorage.removeItem('gold_purchase_draft');
       handleClear();
       
-      alert(isUrdu ? "ریکارڈ محفوظ ہو گیا ہے!" : "Purchase Saved Successfully!");
+      showToast(isUrdu ? "ریکارڈ محفوظ ہو گیا ہے!" : "Purchase Saved Successfully!", 'success');
     } catch (error) {
       console.error("Failed to save purchase:", error);
-      alert("Error saving record. Please ensure you have enough storage or try refreshing.");
+      showToast(isUrdu ? "ریکارڈ محفوظ کرنے میں خرابی پیش آئی" : "Error saving record.", 'error');
     }
   };
 

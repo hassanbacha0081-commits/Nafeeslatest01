@@ -139,7 +139,7 @@ export default function Orders({ lang }: OrdersProps) {
           }
         }
       });
-      const imgData = canvas.toDataURL('image/jpeg', 0.85);
+      const imgData = canvas.toDataURL('image/jpeg', 0.95);
 
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;

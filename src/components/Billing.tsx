@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { db, type Sale, type SalesItem } from '../db';
 import { translations, type Language } from '../translations';
 import { formatDate, compressImage } from '../lib/utils';
+import { showToast } from '../lib/toast';
 import { Camera, RotateCcw, Trash2, Printer, Plus, X, ShoppingBag, Download, AlertCircle, CheckCircle2, Users, Image as ImageIcon, Barcode, Tag } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import { AnimatePresence, motion } from 'motion/react';
@@ -130,11 +131,21 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     }
   };
 
+  const previewScrollRef = useRef<HTMLDivElement>(null);
+
+  // Scroll print preview to top when opened
+  useEffect(() => {
+    if (showPrintPreview && previewScrollRef.current) {
+      previewScrollRef.current.scrollTop = 0;
+    }
+  }, [showPrintPreview]);
+
   const generatePDF = async (data: Sale, id: number): Promise<string | null> => {
     if (!printRef.current) return null;
     setIsPrinting(true);
     try {
       window.scrollTo(0, 0);
+      if (previewScrollRef.current) previewScrollRef.current.scrollTop = 0;
       
       const canvas = await html2canvas(printRef.current, {
         scale: 3.0, // 1.0x avoids sub-pixel scaling calculations and is faster
@@ -163,7 +174,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
           }
         }
       });
-      const imgData = canvas.toDataURL('image/jpeg', 0.8); // JPEG encoding is significantly faster than PNG
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // High quality preserves crisp QR edges
 
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;
@@ -205,7 +216,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         });
       } catch (e) {
         console.error('Error sharing PDF', e);
-        alert(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file");
+        showToast(lang === 'ur' ? "فائل شیئر کرنے میں خرابی پیش آئی" : "Error sharing file", 'error');
       }
     } else {
       const link = document.createElement('a');
@@ -278,22 +289,34 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     return Math.round(formData.oNetWt * formData.iRate);
   };
 
+  const calcCurrentItemTotal = () => {
+    if (!formData.iWt || !formData.iRate) return 0;
+    return Math.round((formData.iWt + (formData.iMk || 0)) * formData.iRate + (formData.iMazdori || 0));
+  };
+
   const addItem = () => {
-    if (formData.iName && formData.iWt && formData.iRate) {
-      const newItem: SalesItem = {
-        n: formData.iName,
-        w: formData.iWt,
-        p: formData.iQty || 1,
-        mk: formData.iMk,
-        r: formData.iRate,
-        t: (formData.iWt + formData.iMk) * formData.iRate + formData.iMazdori,
-        mz: formData.iMazdori || 0,
-        img: lastImg
-      };
-      setBillItems([...billItems, newItem]);
-      setLastImg(null);
-      setFormData({ ...formData, iName: '', iWt: 0, iQty: 1, iMk: 0, iMazdori: 0 });
+    if (!formData.iName?.trim()) {
+      showToast(lang === 'ur' ? 'براہ کرم آئٹم کا نام منتخب کریں' : 'Please select an item name', 'warning');
+      return;
     }
+    if (!formData.iWt || !formData.iRate) {
+      showToast(lang === 'ur' ? 'وزن اور ریٹ درج کریں' : 'Please enter weight and gold rate', 'warning');
+      return;
+    }
+    const newItem: SalesItem = {
+      n: formData.iName,
+      w: formData.iWt,
+      p: formData.iQty || 1,
+      mk: formData.iMk,
+      r: formData.iRate,
+      t: (formData.iWt + formData.iMk) * formData.iRate + formData.iMazdori,
+      mz: formData.iMazdori || 0,
+      img: lastImg
+    };
+    setBillItems([...billItems, newItem]);
+    setLastImg(null);
+    setFormData({ ...formData, iName: '', iWt: 0, iQty: 1, iMk: 0, iMazdori: 0 });
+    showToast(lang === 'ur' ? `✓ ${newItem.n} بل میں شامل ہو گیا` : `✓ ${newItem.n} added to bill`, 'success');
   };
 
   const addOldGold = () => {
@@ -328,7 +351,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     const name = formData.cName || 'Customer';
     const phone = formData.cPhone || '';
     if (!phone) {
-      alert(lang === 'ur' ? 'پہلے فون نمبر درج کریں' : 'Please enter phone number first');
+      showToast(lang === 'ur' ? 'پہلے فون نمبر درج کریں' : 'Please enter phone number first', 'warning');
       return;
     }
     const vcard = `BEGIN:VCARD\nVERSION:3.0\nFN:${name}\nTEL:${phone}\nEND:VCARD`;
@@ -453,7 +476,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                         setPdfUrl(url);
                       } else {
                         setShowPrintPreview(false);
-                        alert('PDF generation failed. Please try again or check the image format.');
+                        showToast(lang === 'ur' ? 'پی ڈی ایف بنانے میں خرابی پیش آئی' : 'PDF generation failed. Please try again.', 'error');
                       }
       }, 400);
 
@@ -542,7 +565,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
               </button>
             </div>
             
-            <div className="flex-1 overflow-y-auto p-8 flex justify-center bg-zinc-200 scrollbar-thin scrollbar-thumb-zinc-400">
+            <div ref={previewScrollRef} className="flex-1 overflow-y-auto p-8 flex justify-center bg-zinc-200 scrollbar-thin scrollbar-thumb-zinc-400">
               <div className="bg-white shadow-2xl origin-top transition-transform duration-300 transform scale-[0.6] sm:scale-[0.8] md:scale-[0.9] lg:scale-100">
                 <PrintReceipt 
                   ref={printRef}
@@ -626,10 +649,9 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Customer & Rate Info */}
         <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-sky-100 space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-2 h-full bg-gold"></div>
-            <h3 className="text-xl font-bold text-sky-800 urdu-text flex items-center gap-2 mb-4">
-              <Users className="text-gold" size={24} />
+          <div className="bg-white p-7 rounded-3xl shadow-sm border border-sky-100 space-y-6">
+            <h3 className="text-xl font-bold text-sky-900 urdu-text flex items-center gap-2 mb-4 pb-3 border-b border-sky-100">
+              <Users className="text-gold-dark" size={22} />
               {lang === 'ur' ? 'گاہک کی تفصیلات' : 'Customer Details'}
             </h3>
             
@@ -727,10 +749,9 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
           </div>
 
           {/* Item Entry */}
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-sky-100 space-y-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-2 h-full bg-sky-400"></div>
-            <h3 className="text-xl font-bold text-sky-800 urdu-text flex items-center gap-2 mb-4">
-              <Plus className="text-sky-500" size={24} />
+          <div className="bg-white p-7 rounded-3xl shadow-sm border border-sky-100 space-y-6">
+            <h3 className="text-xl font-bold text-sky-900 urdu-text flex items-center gap-2 mb-4 pb-3 border-b border-sky-100">
+              <Plus className="text-sky-600" size={22} />
               {lang === 'ur' ? 'آئٹم شامل کریں (Sale Items)' : 'Add Items'}
             </h3>
 
@@ -892,11 +913,23 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                 )}
               </div>
               
+              {calcCurrentItemTotal() > 0 && (
+                <div className="flex items-center justify-between px-5 py-3.5 rounded-2xl bg-sky-50 border border-sky-200 text-sky-950">
+                  <span className="text-sm font-bold urdu-text">
+                    {lang === 'ur' ? 'اس آئٹم کی تخمینہ قیمت:' : 'Estimated Item Total:'}
+                  </span>
+                  <span className="text-xl font-black font-mono tabular-nums text-sky-800">
+                    Rs. {calcCurrentItemTotal().toLocaleString()}
+                  </span>
+                </div>
+              )}
+
               <button
+                type="button"
                 onClick={addItem}
-                className="w-full flex items-center justify-center gap-3 px-8 py-5 bg-sky-600 text-white rounded-2xl hover:bg-sky-700 transition-all shadow-xl shadow-sky-200 hover:-translate-y-1 active:translate-y-0"
+                className="w-full flex items-center justify-center gap-3 px-8 py-4 bg-sky-600 text-white rounded-2xl hover:bg-sky-700 transition-colors shadow-lg cursor-pointer"
               >
-                <Plus size={24} className="text-gold" />
+                <Plus size={22} className="text-gold" />
                 <span className="font-bold urdu-text text-xl">{t.addItem}</span>
               </button>
             </div>
@@ -1003,22 +1036,27 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
             <div className="pt-6 border-t-4 border-double border-sky-100 space-y-4">
               <div className="flex justify-between items-center px-2">
                 <span className="text-zinc-500 font-bold urdu-text">{t.totalAmount}</span>
-                <span className="text-xl font-bold text-zinc-900">Rs. {getGrandTotal().toLocaleString()}</span>
+                <span className="text-xl font-bold text-zinc-900 font-mono tabular-nums">Rs. {getGrandTotal().toLocaleString()}</span>
               </div>
-              <div className="flex justify-between items-center bg-sky-50 p-4 rounded-2xl border border-sky-100">
-                <span className="text-zinc-500 font-bold urdu-text">{t.receivedAmount}</span>
-                <div className="relative">
-                  <input
-                    type="number"
-                    value={formData.recAmt || ''}
-                    onChange={e => setFormData({ ...formData, recAmt: Number(e.target.value) })}
-                    className="w-32 px-4 py-2 bg-white border border-sky-100 rounded-xl text-right font-black text-zinc-900 focus:ring-2 focus:ring-gold outline-none"
-                  />
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-gold opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-3 w-3 bg-gold"></span>
-                  </span>
+              <div className="flex justify-between items-center gap-2 bg-sky-50 p-4 rounded-2xl border border-sky-100">
+                <div className="flex flex-col gap-1">
+                  <span className="text-zinc-600 font-bold urdu-text text-sm">{t.receivedAmount}</span>
+                  {getGrandTotal() > 0 && formData.recAmt !== getGrandTotal() && (
+                    <button
+                      type="button"
+                      onClick={() => setFormData({ ...formData, recAmt: getGrandTotal() })}
+                      className="text-[11px] font-bold text-sky-700 hover:text-sky-900 underline text-left urdu-text cursor-pointer"
+                    >
+                      {lang === 'ur' ? 'مکمل رقم بھریں' : 'Fill Full Cash'}
+                    </button>
+                  )}
                 </div>
+                <input
+                  type="number"
+                  value={formData.recAmt || ''}
+                  onChange={e => setFormData({ ...formData, recAmt: Number(e.target.value) })}
+                  className="w-36 px-4 py-2 bg-white border border-sky-200 rounded-xl text-right font-black font-mono tabular-nums text-zinc-900 focus:ring-2 focus:ring-gold outline-none"
+                />
               </div>
 
               <div className="flex justify-between items-center bg-sky-50 p-4 rounded-2xl border border-sky-100">

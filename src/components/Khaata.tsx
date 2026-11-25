@@ -21,6 +21,7 @@ import ImageLightbox from './ImageLightbox';
 import { ConfirmModal } from './ConfirmModal';
 import { APP_CONFIG } from '../config';
 import { MultiSelectInput } from './MultiSelectInput';
+import { PhoneChannelLogos } from './PhoneChannelLogos';
 
 interface KhaataProps {
   lang: Language;
@@ -1439,7 +1440,10 @@ const normalizeEntry = (entry: any) => {
                   <div className="text-center border-b-2 border-gold pb-4 mb-6">
                     <h1 className="text-4xl font-black text-gold-dark mb-1">{t.shopName}</h1>
                     <p className={`text-sm font-bold text-zinc-500 ${lang === 'ur' ? 'font-nastaliq' : ''}`}>{t.shopAddress}</p>
-                    <p className="text-xs font-mono mt-1" dir="ltr">{t.shopPhone}</p>
+                    <p className="text-xs font-mono mt-1 flex items-center justify-center gap-1.5" dir="ltr">
+                      <PhoneChannelLogos size={13} />
+                      <span>{t.shopPhone}</span>
+                    </p>
                     <div className={`inline-block bg-zinc-100 px-4 py-1 rounded-full font-bold text-xs border border-zinc-200 mt-3 ${lang === 'ur' ? 'urdu-text' : ''}`}>
                       {lang === 'ur' ? 'تفصیلی سونا کھاتہ رپورٹ (Khaata Statement)' : 'Detailed Gold Khaata Statement'}
                       {pdfTargetAccountId === null && itemSearchTerm && (lang === 'ur' ? ` - فلٹر: ${itemSearchTerm}` : ` - Filter: ${itemSearchTerm}`)}
@@ -1606,7 +1610,10 @@ const normalizeEntry = (entry: any) => {
                         <div className="text-center border-b-2 border-gold pb-4 mb-6">
                           <h1 className="text-4xl font-black urdu-text text-gold-dark mb-1">{translations.ur.shopName}</h1>
                           <p className="text-sm font-bold text-zinc-500 font-nastaliq">{translations.ur.shopAddress}</p>
-                          <p className="text-xs font-mono mt-1" dir="ltr">{translations.ur.shopPhone}</p>
+                          <p className="text-xs font-mono mt-1 flex items-center justify-center gap-1.5" dir="ltr">
+                            <PhoneChannelLogos size={13} />
+                            <span>{translations.ur.shopPhone}</span>
+                          </p>
                           <div className="inline-block bg-zinc-100 px-4 py-1 rounded-full font-bold urdu-text text-xs border border-zinc-200 mt-3">
                             تفصیلی سونا کھاتہ رپورٹ (Khaata Statement)
                             {itemSearchTerm && ` - فلٹر: ${itemSearchTerm}`}

@@ -61,7 +61,7 @@ export default function Dashboard({ lang, setActiveSection }: DashboardProps) {
                           orders.reduce((acc, o) => acc + (o.rem || 0), 0);
 
     const totalGoldSold = sales.reduce((acc, s) => {
-      return acc + s.items.reduce((sum, item) => sum + item.w, 0);
+      return acc + (s.items || []).reduce((sum, item) => sum + (Number(item.w) || 0), 0);
     }, 0);
 
     const totalGoldPurchased = purchases.reduce((acc, p) => acc + p.weight, 0);
@@ -168,19 +168,18 @@ export default function Dashboard({ lang, setActiveSection }: DashboardProps) {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {cards.map((card, i) => (
-          <div key={i} className="bg-white p-6 rounded-3xl border border-sky-100 shadow-sm relative overflow-hidden group hover:shadow-xl hover:-translate-y-1 transition-all">
-            <div className={`absolute top-0 left-0 w-1.5 h-full ${card.color}`}></div>
+          <div key={i} className="bg-white p-6 rounded-3xl border border-sky-100 shadow-sm group hover:shadow-lg transition-shadow">
             <div className="flex justify-between items-start mb-4">
               <div className={`p-3 rounded-2xl ${card.color}/10 ${card.textColor}`}>
                 <card.icon size={24} />
               </div>
-              <div className={`flex items-center gap-1 text-xs font-bold ${card.trendUp ? 'text-emerald-500' : 'text-amber-500'}`}>
+              <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${card.trendUp ? 'text-emerald-600' : 'text-amber-600'}`}>
                 {card.trendUp ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
                 {card.trend}
               </div>
             </div>
             <h3 className="text-zinc-500 text-sm font-bold urdu-text mb-1">{card.title}</h3>
-            <p className="text-2xl font-black text-zinc-900 tracking-tight">{card.value}</p>
+            <p className="text-2xl font-black text-zinc-900 tracking-tight font-mono tabular-nums">{card.value}</p>
           </div>
         ))}
       </div>

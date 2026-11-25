@@ -106,7 +106,7 @@ export default function Repairs({ lang }: RepairsProps) {
           }
         }
       });
-      const imgData = canvas.toDataURL('image/jpeg', 0.8); // JPEG encoding is significantly faster than PNG
+      const imgData = canvas.toDataURL('image/jpeg', 0.95); // High quality preserves crisp QR edges
 
       const canvasWidth = canvas.width;
       const canvasHeight = canvas.height;

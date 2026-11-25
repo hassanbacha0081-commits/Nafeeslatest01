@@ -328,7 +328,8 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         r: formData.iRate,
         mk: 0,
         t: (formData.oNetWt * formData.iRate * -1),
-        img: null
+        img: null,
+        imgs: []
       };
       setBillItems([...billItems, oldGoldItem]);
       setFormData({ ...formData, oTotalWt: 0, oNetWt: 0 });
@@ -854,61 +855,61 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
 
             <div className="space-y-6 pt-4">
               <div className="flex flex-col sm:flex-row gap-6">
-                <div className="flex-1 grid grid-cols-1 xs:grid-cols-2 gap-4">
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      capture="environment"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="item-image-camera"
-                    />
-                    <label
-                      htmlFor="item-image-camera"
-                      className="w-full h-full min-h-[140px] flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-3xl border-2 border-dashed border-sky-200 text-sky-400 hover:border-gold hover:text-gold hover:bg-gold/5 transition-all cursor-pointer bg-sky-50 text-center"
-                    >
-                      <div className="p-3 bg-white rounded-2xl shadow-sm text-sky-500 transition-colors">
-                        <Camera size={24} />
-                      </div>
-                      <span className="font-bold urdu-text text-xs">
-                        {lang === 'ur' ? 'کیمرہ (Take Photo)' : 'Take Photo'}
-                      </span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="item-image-gallery"
-                    />
-                    <label
-                      htmlFor="item-image-gallery"
-                      className="w-full h-full min-h-[140px] flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-3xl border-2 border-dashed border-sky-200 text-sky-400 hover:border-gold hover:text-gold hover:bg-gold/5 transition-all cursor-pointer bg-sky-50 text-center"
-                    >
-                      <div className="p-3 bg-white rounded-2xl shadow-sm text-sky-500 transition-colors">
-                        <ImageIcon size={24} />
-                      </div>
-                      <span className="font-bold urdu-text text-xs">
-                        {lang === 'ur' ? 'گیلری (Choose Gallery)' : 'Choose Gallery'}
-                      </span>
-                    </label>
-                  </div>
-                </div>
-
-                {lastImg && (
-                  <div className="relative w-full sm:w-48 h-48 rounded-3xl overflow-hidden border border-sky-200 shadow-xl animate-in zoom-in-95 duration-500 group cursor-pointer" onClick={() => setLightboxImage(lastImg)}>
-                    <img src={lastImg} alt="Preview" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" />
+                {lastImg ? (
+                  <div className="relative w-40 h-40 mx-auto rounded-2xl overflow-hidden border border-sky-200 shadow-lg group cursor-pointer" onClick={() => setLightboxImage(lastImg)}>
+                    <img src={lastImg} alt="Preview" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                     <button 
+                      type="button"
                       onClick={(e) => { e.stopPropagation(); setLastImg(null); }}
-                      className="absolute top-3 right-3 p-2 bg-red-600 text-white rounded-xl shadow-lg hover:bg-red-700 transition-colors z-10"
+                      className="absolute top-2 right-2 p-2 bg-red-600 text-white rounded-xl shadow-lg hover:bg-red-700 transition-colors z-10"
                     >
-                      <X size={18} />
+                      <RotateCcw size={16} />
                     </button>
-                    <div className="absolute inset-0 bg-sky-900/10 group-hover:bg-transparent transition-colors"></div>
+                  </div>
+                ) : (
+                  <div className="flex-1 grid grid-cols-1 xs:grid-cols-2 gap-4">
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id="item-image-camera"
+                      />
+                      <label
+                        htmlFor="item-image-camera"
+                        className="w-full h-full min-h-[140px] flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-3xl border-2 border-dashed border-sky-200 text-sky-400 hover:border-gold hover:text-gold hover:bg-gold/5 transition-all cursor-pointer bg-sky-50 text-center"
+                      >
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-sky-500 transition-colors">
+                          <Camera size={24} />
+                        </div>
+                        <span className="font-bold urdu-text text-xs">
+                          {lang === 'ur' ? 'کیمرہ (Take Photo)' : 'Take Photo'}
+                        </span>
+                      </label>
+                    </div>
+
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleFileChange}
+                        className="hidden"
+                        id="item-image-gallery"
+                      />
+                      <label
+                        htmlFor="item-image-gallery"
+                        className="w-full h-full min-h-[140px] flex flex-col items-center justify-center gap-2 px-4 py-4 rounded-3xl border-2 border-dashed border-sky-200 text-sky-400 hover:border-gold hover:text-gold hover:bg-gold/5 transition-all cursor-pointer bg-sky-50 text-center"
+                      >
+                        <div className="p-3 bg-white rounded-2xl shadow-sm text-sky-500 transition-colors">
+                          <ImageIcon size={24} />
+                        </div>
+                        <span className="font-bold urdu-text text-xs">
+                          {lang === 'ur' ? 'گیلری (Choose Gallery)' : 'Choose Gallery'}
+                        </span>
+                      </label>
+                    </div>
                   </div>
                 )}
               </div>

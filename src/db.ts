@@ -9,6 +9,7 @@ export interface SalesItem {
   t: number; // Total for item
   mz?: number; // Mazdori/Labor
   img?: string | null;
+  imgs?: string[];
 }
 
 export interface Sale {
@@ -51,6 +52,7 @@ export interface Order {
   measurements?: string;
   pricePerTola?: string;
   img?: string | null;
+  imgs?: string[];
   makingCharges?: string;
   weightPolish?: string;
   totalWt?: string;
@@ -71,6 +73,7 @@ export interface KarigarRecord {
   kaat: number;
   net: number;
   img?: string | null;
+  imgs?: string[];
   date: string;
 }
 
@@ -84,6 +87,7 @@ export interface Repair {
   status: 'Pending' | 'Done';
   date: Date;
   img?: string | null;
+  imgs?: string[];
 }
 
 export interface StockItem {
@@ -94,6 +98,7 @@ export interface StockItem {
   unit: string;
   pieces?: number;
   img?: string | null;
+  imgs?: string[];
 }
 
 export interface GoldPurchase {
@@ -105,6 +110,7 @@ export interface GoldPurchase {
   total: number;
   date: string;
   img?: string | null;
+  imgs?: string[];
 }
 
 export interface Expense {

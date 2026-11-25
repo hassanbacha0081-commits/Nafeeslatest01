@@ -29,7 +29,7 @@ import ContactPickerModal from './ContactPickerModal';
 export default function Orders({ lang }: OrdersProps) {
   const t = translations[lang];
   const [isAdding, setIsAdding] = useState(false);
-  const [currentImg, setCurrentImg] = useState<string | null>(null);
+  const [currentImgs, setCurrentImgs] = useState<string[]>([]);
   const [lightboxData, setLightboxData] = useState<{ img: string; title?: string; phone?: string; name?: string; caption?: string } | null>(null);
   const [whatsappModalData, setWhatsappModalData] = useState<WhatsAppShareData | null>(null);
   const [editingPayments, setEditingPayments] = useState<OrderPayment[]>([]);
@@ -328,7 +328,7 @@ export default function Orders({ lang }: OrdersProps) {
 
   const resetForm = () => {
     setEditId(null);
-    setCurrentImg(null);
+    setCurrentImgs([]);
     setEditingPayments([]);
     setFormQists([]);
     setFirstPaymentDate('');
@@ -366,15 +366,20 @@ export default function Orders({ lang }: OrdersProps) {
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const base64 = event.target?.result as string;
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const newImgs: string[] = [];
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        const base64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onload = (event) => resolve(event.target?.result as string);
+          reader.readAsDataURL(file);
+        });
         const compressed = await compressImage(base64);
-        setCurrentImg(compressed);
-      };
-      reader.readAsDataURL(file);
+        newImgs.push(compressed);
+      }
+      setCurrentImgs(prev => [...prev, ...newImgs]);
     }
   };
 
@@ -440,7 +445,8 @@ export default function Orders({ lang }: OrdersProps) {
       rem: rem,
       discount: discount,
       status: formData.status,
-      img: currentImg,
+      img: currentImgs[0] || null,
+      imgs: currentImgs,
       makingCharges: formData.makingCharges ? parseFloat(Number(formData.makingCharges).toFixed(2)).toString() : '',
       weightPolish: formData.weightPolish,
       totalWt: formData.totalWt ? parseFloat(Number(formData.totalWt).toFixed(2)).toString() : '',
@@ -522,7 +528,7 @@ export default function Orders({ lang }: OrdersProps) {
       mazdori: mazdoriVal,
       oldGoldMinus: Number(order.oldGoldMinus) || 0
     });
-    setCurrentImg(order.img || null);
+    setCurrentImgs(order.imgs && order.imgs.length > 0 ? order.imgs : (order.img ? [order.img] : []));
     setIsAdding(true);
     window.scrollTo(0, 0);
   };
@@ -1239,65 +1245,77 @@ export default function Orders({ lang }: OrdersProps) {
             )}
 
             {/* Picture Upload / Camera Capture in sequence, spanning 2 cols */}
-            <div className="col-span-1 md:col-span-2 space-y-1 mt-2">
-              <label className="text-xs text-zinc-500 urdu-text font-bold">{lang === 'ur' ? 'آرڈر کی تصویر (Order Pic):' : 'Order Pic:'}</label>
-              {currentImg ? (
-                <div 
-                  className="relative group cursor-pointer max-w-sm mx-auto" 
-                  onClick={() => setLightboxData({
-                    img: currentImg,
-                    title: lang === 'ur' ? 'آرڈر کی تصویر' : 'Order Image',
-                    phone: formData.phone,
-                    name: formData.name
-                  })}
-                >
-                  <img src={currentImg} alt="Preview" className="w-full h-40 object-contain border border-sky-200 rounded-lg group-hover:opacity-95 transition-opacity" />
-                  <button 
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); setCurrentImg(null); }}
-                    className="absolute top-2 right-2 p-1.5 bg-red-600 text-white rounded-full z-10 hover:bg-red-700 transition-colors"
-                  >
-                    <RotateCcw size={14} />
-                  </button>
-                </div>
-              ) : (
-                <div className="max-w-sm mx-auto grid grid-cols-2 gap-3">
-                  <div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      capture="environment"
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="ordersCameraInput"
-                    />
-                    <label 
-                      htmlFor="ordersCameraInput"
-                      className="w-full p-3 border-2 border-dashed border-sky-200 rounded-lg text-zinc-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gold hover:text-gold transition-all text-center min-h-[60px]"
+            <div className="col-span-1 md:col-span-2 space-y-2 mt-2">
+              <label className="text-xs text-zinc-500 urdu-text font-bold">{lang === 'ur' ? 'آرڈر کی تصاویر (Order Pictures - ایک سے زیادہ):' : 'Order Pictures (Multiple):'}</label>
+              
+              {currentImgs.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                  {currentImgs.map((imgSrc, imgIdx) => (
+                    <div 
+                      key={imgIdx}
+                      className="relative group cursor-pointer border border-sky-200 rounded-lg overflow-hidden bg-sky-50 shadow-xs"
+                      onClick={() => setLightboxData({
+                        img: imgSrc,
+                        title: lang === 'ur' ? `آرڈر کی تصویر ${imgIdx + 1}` : `Order Image ${imgIdx + 1}`,
+                        phone: formData.phone,
+                        name: formData.name
+                      })}
                     >
-                      <Camera size={16} />
-                      <span className="urdu-text text-xs">{lang === 'ur' ? 'کیمرہ' : 'Camera'}</span>
-                    </label>
-                  </div>
-
-                  <div>
-                    <input 
-                      type="file" 
-                      accept="image/*" 
-                      onChange={handleFileChange}
-                      className="hidden"
-                      id="ordersGalleryInput"
-                    />
-                    <label 
-                      htmlFor="ordersGalleryInput"
-                      className="w-full p-3 border-2 border-dashed border-sky-200 rounded-lg text-zinc-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gold hover:text-gold transition-all text-center min-h-[60px]"
-                    >
-                      <ImageIcon size={16} />
-                      <span className="urdu-text text-xs">{lang === 'ur' ? 'گیلری' : 'Gallery'}</span>
-                    </label>
-                  </div>
+                      <img src={imgSrc} alt="" className="w-full h-28 object-cover group-hover:opacity-90 transition-opacity" />
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setCurrentImgs(currentImgs.filter((_, i) => i !== imgIdx));
+                        }}
+                        className="absolute top-1.5 right-1.5 p-1 bg-red-600 text-white rounded-full shadow hover:bg-red-700 transition-colors"
+                        title={lang === 'ur' ? 'تصویر حذف کریں' : 'Remove Image'}
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
+
+              <div className="max-w-sm mx-auto grid grid-cols-2 gap-3">
+                <div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    capture="environment"
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="ordersCameraInput"
+                  />
+                  <label 
+                    htmlFor="ordersCameraInput"
+                    className="w-full p-3 border-2 border-dashed border-sky-200 rounded-lg text-zinc-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gold hover:text-gold transition-all text-center min-h-[60px]"
+                  >
+                    <Camera size={16} />
+                    <span className="urdu-text text-xs">{lang === 'ur' ? 'کیمرہ / مزید تصویر' : 'Camera'}</span>
+                  </label>
+                </div>
+
+                <div>
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    multiple
+                    onChange={handleFileChange}
+                    className="hidden"
+                    id="ordersGalleryInput"
+                  />
+                  <label 
+                    htmlFor="ordersGalleryInput"
+                    className="w-full p-3 border-2 border-dashed border-sky-200 rounded-lg text-zinc-500 flex flex-col items-center justify-center gap-1 cursor-pointer hover:border-gold hover:text-gold transition-all text-center min-h-[60px]"
+                  >
+                    <ImageIcon size={16} />
+                    <span className="urdu-text text-xs">{lang === 'ur' ? 'گیلری (متعدد)' : 'Gallery (Multiple)'}</span>
+                  </label>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-1">

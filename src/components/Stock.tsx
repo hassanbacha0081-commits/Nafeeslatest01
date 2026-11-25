@@ -220,7 +220,7 @@ export default function Stock({ lang }: StockProps) {
       if (existing && existing.id) {
         record.quantity += existing.quantity;
         record.pieces = (record.pieces || 0) + (existing.pieces || 0);
-        await db.stock.update(existing.id, record);
+        await db.stock.put({ ...record, id: existing.id });
       } else {
         await db.stock.add(record);
       }

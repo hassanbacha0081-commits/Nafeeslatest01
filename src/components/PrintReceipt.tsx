@@ -69,6 +69,21 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
   const [paymentQrPayload, setPaymentQrPayload] = useState<string>('');
   const [paymentQrUrl, setPaymentQrUrl] = useState<string>(CLEAN_EASYPAISA_QR_PATH);
 
+  const renderImageSection = (img?: string | null, imgs?: string[]) => {
+    const list = [img, ...(imgs || [])].filter(Boolean);
+    if (list.length === 0) return null;
+    return (
+      <div className="mt-3 mb-3 text-center">
+        <p className="font-bold text-xs font-nastaliq mb-1.5 text-right">تصاویر (Images):</p>
+        <div className="flex flex-wrap justify-center gap-2">
+          {list.map((src, i) => (
+            <img key={i} src={src!} alt="" className="max-h-40 max-w-[160px] mx-auto border border-zinc-200 rounded-lg shadow-sm object-contain" />
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const getOrderStatusConfig = (status?: string) => {
     const s = (status || '').toLowerCase().trim();
     if (s === 'progress' || s === 'in progress' || s === 'in_progress') {
@@ -599,8 +614,8 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
                       <img 
                         src={item.img} 
                         alt="" 
-                        style={{ height: '80px', maxHeight: '80px', width: 'auto', maxWidth: '100%', objectFit: 'contain', margin: '0 auto' }} 
-                        className="rounded border border-zinc-200 shadow-sm"
+                        style={{ height: '70px', maxHeight: '70px', width: 'auto', maxWidth: '70px', objectFit: 'contain' }} 
+                        className="mx-auto rounded border border-zinc-200 shadow-sm"
                       />
                     ) : (
                       <span className="text-zinc-300">-</span>
@@ -821,12 +836,7 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </table>
           </div>
 
-          {order.img && (
-            <div className="mt-2 mb-2 text-center">
-              <p className="font-bold text-xs font-nastaliq mb-1 text-right">تصویر:</p>
-              <img src={order.img} alt="" className="max-h-36 mx-auto border border-zinc-200 rounded-lg shadow-sm" style={{ objectFit: 'contain' }} />
-            </div>
-          )}
+          {renderImageSection(order.img, order.imgs)}
 
           <h4 className="font-bold mt-2 mb-1.5 text-sm font-nastaliq text-right">ادائیگیوں کی تفصیل:</h4>
           <table className="receipt-table" style={{ tableLayout: 'fixed', width: '100%', marginBottom: '14px' }}>
@@ -1020,11 +1030,7 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </tbody>
           </table>
 
-          {repair.img && (
-            <div className="mt-4 text-center">
-              <img src={repair.img} alt="" className="max-h-48 mx-auto border border-zinc-200 rounded" />
-            </div>
-          )}
+          {renderImageSection(repair.img, repair.imgs)}
 
           <div className="flex justify-between items-end mt-4 gap-4" dir="ltr">
             {/* Left side: EasyPaisa / Payment QR code */}
@@ -1160,11 +1166,7 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
             </table>
           </div>
 
-          {karigar.img && (
-            <div className="mt-4 text-center">
-              <img src={karigar.img} alt="" className="max-h-48 mx-auto border border-zinc-200 rounded" />
-            </div>
-          )}
+          {renderImageSection(karigar.img, karigar.imgs)}
 
           <div className="flex justify-between items-center pt-4 mt-4 border-t border-zinc-200" dir="ltr">
             {/* Left side: Royal Gold Authenticity Stamp */}
@@ -1245,11 +1247,7 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           </table>
         </div>
 
-          {stock.img && (
-            <div className="mt-6 text-center">
-              <img src={stock.img} alt="" className="max-h-64 mx-auto border border-zinc-200 rounded" />
-            </div>
-          )}
+          {renderImageSection(stock.img, stock.imgs)}
 
           <div className="flex justify-between items-center pt-4 mt-4 border-t border-zinc-200" dir="ltr">
             <div className="flex items-center gap-3">
@@ -1337,12 +1335,7 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
           </tbody>
         </table>
 
-        {purchase.img && (
-          <div className="mt-4 text-center">
-            <h4 className="text-xs font-bold font-nastaliq mb-2">خریدے گئے سونے کی تصویر</h4>
-            <img src={purchase.img} alt="" className="max-h-64 mx-auto border-2 border-zinc-200 rounded-xl shadow-sm" />
-          </div>
-        )}
+        {renderImageSection(purchase.img, purchase.imgs)}
 
         <div className="flex justify-between items-end mt-6 gap-4" dir="ltr">
           {/* Left side: Royal Gold Authenticity Stamp */}

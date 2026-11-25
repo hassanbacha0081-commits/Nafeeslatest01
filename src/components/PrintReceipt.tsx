@@ -70,14 +70,28 @@ export const PrintReceipt = forwardRef<HTMLDivElement, PrintReceiptProps>(({ typ
   const [paymentQrUrl, setPaymentQrUrl] = useState<string>(CLEAN_EASYPAISA_QR_PATH);
 
   const renderImageSection = (img?: string | null, imgs?: string[]) => {
-    const list = [img, ...(imgs || [])].filter(Boolean);
-    if (list.length === 0) return null;
+    let list: string[] = [];
+    if (imgs && imgs.length > 0) {
+      list = imgs.filter((s): s is string => Boolean(s));
+    } else if (img) {
+      list = [img];
+    }
+    const uniqueList = Array.from(new Set(list));
+    if (uniqueList.length === 0) return null;
     return (
-      <div className="mt-3 mb-3 text-center">
-        <p className="font-bold text-xs font-nastaliq mb-1.5 text-right">تصاویر (Images):</p>
-        <div className="flex flex-wrap justify-center gap-2">
-          {list.map((src, i) => (
-            <img key={i} src={src!} alt="" className="max-h-40 max-w-[160px] mx-auto border border-zinc-200 rounded-lg shadow-sm object-contain" />
+      <div className="mt-2 mb-2 text-center">
+        <p className="font-bold text-xs font-nastaliq mb-1 text-right">
+          {uniqueList.length > 1 ? 'تصاویر (Images):' : 'تصویر (Image):'}
+        </p>
+        <div className="flex flex-wrap justify-center items-center gap-2.5 mx-auto" style={{ width: 'fit-content' }}>
+          {uniqueList.map((src, i) => (
+            <img 
+              key={i} 
+              src={src} 
+              alt="" 
+              className="border border-zinc-300 rounded-lg shadow-xs object-contain bg-white" 
+              style={{ maxHeight: '135px', maxWidth: '160px', width: 'auto', height: 'auto', display: 'inline-block' }}
+            />
           ))}
         </div>
       </div>

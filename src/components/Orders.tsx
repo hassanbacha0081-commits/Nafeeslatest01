@@ -380,6 +380,7 @@ export default function Orders({ lang }: OrdersProps) {
         newImgs.push(compressed);
       }
       setCurrentImgs(prev => [...prev, ...newImgs]);
+      e.target.value = '';
     }
   };
 
@@ -2019,44 +2020,77 @@ export default function Orders({ lang }: OrdersProps) {
                   <span className="font-bold text-xs">{order.izafiWt}g</span>
                 </div>
               )}
-              {order.img && (
-                <div className="flex justify-between items-center text-sky-800 bg-sky-50 px-2.5 py-1.5 rounded-lg border border-sky-200">
-                  <span className="urdu-text text-xs font-bold flex items-center gap-1.5 text-sky-900">
-                    <Camera size={14} className="text-sky-600" />
-                    {lang === 'ur' ? 'تصویر' : 'Image'}:
-                  </span>
-                  <div className="flex items-center gap-1.5">
-                    <button 
-                      type="button"
-                      onClick={() => setLightboxData({
-                        img: order.img!,
-                        title: order.item ? `${order.item} (${order.name})` : (lang === 'ur' ? 'آرڈر کی تصویر' : 'Order Image'),
-                        phone: order.phone,
-                        name: order.name,
-                        caption: `*${APP_CONFIG.shopNameUrdu}: آرڈر تصویر*\nگاہک: ${order.name}\nآئٹم: ${order.item}\nبقایا: Rs. ${order.rem.toLocaleString()}\nاسٹیٹس: ${getStatusLabel(order.status, lang === 'ur')}\nشکریہ!`
-                      })}
-                      className="p-1 px-2 bg-sky-200 hover:bg-sky-300 text-sky-800 rounded font-bold text-xs transition-colors flex items-center gap-1"
-                      title={lang === 'ur' ? 'تصویر دیکھیں' : 'View'}
-                    >
-                      <Eye size={12} />
-                      {lang === 'ur' ? 'دیکھیں' : 'View'}
-                    </button>
-                    <button 
-                      type="button"
-                      onClick={() => setWhatsappModalData({
-                        img: order.img!,
-                        phone: order.phone,
-                        name: order.name,
-                        caption: `*${APP_CONFIG.shopNameUrdu}: آرڈر تصویر*\nگاہک: ${order.name}\nآئٹم: ${order.item}\nبقایا: Rs. ${order.rem.toLocaleString()}\nاسٹیٹس: ${getStatusLabel(order.status, lang === 'ur')}\nشکریہ!`,
-                        title: order.item ? `${order.item} (${order.name})` : (lang === 'ur' ? 'آرڈر کی تصویر' : 'Order Image')
-                      })}
-                      className="p-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-xs transition-colors flex items-center gap-1 shadow-xs"
-                      title={lang === 'ur' ? 'محفوظ شدہ تصویر واٹس ایپ کریں' : 'Send image via WhatsApp'}
-                    >
-                      <MessageCircle size={12} />
-                      <span>{lang === 'ur' ? 'تصویر واٹس ایپ' : 'WhatsApp Img'}</span>
-                    </button>
+              {((order.imgs && order.imgs.length > 0) || order.img) && (
+                <div className="flex flex-col gap-2 text-sky-800 bg-sky-50 px-2.5 py-1.5 rounded-lg border border-sky-200">
+                  <div className="flex justify-between items-center">
+                    <span className="urdu-text text-xs font-bold flex items-center gap-1.5 text-sky-900">
+                      <Camera size={14} className="text-sky-600" />
+                      {lang === 'ur' ? 'تصاویر' : 'Images'}
+                      {order.imgs && order.imgs.length > 1 && (
+                        <span className="bg-sky-200 text-sky-900 text-[10px] px-1.5 py-0.5 rounded-full font-mono font-bold">
+                          {order.imgs.length}
+                        </span>
+                      )}:
+                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const primaryImg = (order.imgs && order.imgs[0]) || order.img!;
+                          setLightboxData({
+                            img: primaryImg,
+                            title: order.item ? `${order.item} (${order.name})` : (lang === 'ur' ? 'آرڈر کی تصویر' : 'Order Image'),
+                            phone: order.phone,
+                            name: order.name,
+                            caption: `*${APP_CONFIG.shopNameUrdu}: آرڈر تصویر*\nگاہک: ${order.name}\nآئٹم: ${order.item}\nبقایا: Rs. ${order.rem.toLocaleString()}\nاسٹیٹس: ${getStatusLabel(order.status, lang === 'ur')}\nشکریہ!`
+                          });
+                        }}
+                        className="p-1 px-2 bg-sky-200 hover:bg-sky-300 text-sky-800 rounded font-bold text-xs transition-colors flex items-center gap-1 cursor-pointer"
+                        title={lang === 'ur' ? 'تصویر دیکھیں' : 'View'}
+                      >
+                        <Eye size={12} />
+                        {lang === 'ur' ? 'دیکھیں' : 'View'}
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => {
+                          const primaryImg = (order.imgs && order.imgs[0]) || order.img!;
+                          setWhatsappModalData({
+                            img: primaryImg,
+                            phone: order.phone,
+                            name: order.name,
+                            caption: `*${APP_CONFIG.shopNameUrdu}: آرڈر تصویر*\nگاہک: ${order.name}\nآئٹم: ${order.item}\nبقایا: Rs. ${order.rem.toLocaleString()}\nاسٹیٹس: ${getStatusLabel(order.status, lang === 'ur')}\nشکریہ!`,
+                            title: order.item ? `${order.item} (${order.name})` : (lang === 'ur' ? 'آرڈر کی تصویر' : 'Order Image')
+                          });
+                        }}
+                        className="p-1 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-xs transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                        title={lang === 'ur' ? 'محفوظ شدہ تصویر واٹس ایپ کریں' : 'Send image via WhatsApp'}
+                      >
+                        <MessageCircle size={12} />
+                        <span>{lang === 'ur' ? 'تصویر واٹس ایپ' : 'WhatsApp Img'}</span>
+                      </button>
+                    </div>
                   </div>
+                  {order.imgs && order.imgs.length > 1 && (
+                    <div className="flex gap-1.5 overflow-x-auto pb-1 pt-0.5">
+                      {order.imgs.map((imgSrc, imgIdx) => (
+                        <img 
+                          key={imgIdx}
+                          src={imgSrc}
+                          alt=""
+                          onClick={() => setLightboxData({
+                            img: imgSrc,
+                            title: order.item ? `${order.item} (${order.name}) - تصویر ${imgIdx + 1}` : (lang === 'ur' ? `آرڈر کی تصویر ${imgIdx + 1}` : `Order Image ${imgIdx + 1}`),
+                            phone: order.phone,
+                            name: order.name,
+                            caption: `*${APP_CONFIG.shopNameUrdu}: آرڈر تصویر ${imgIdx + 1}*\nگاہک: ${order.name}\nآئٹم: ${order.item}\nبقایا: Rs. ${order.rem.toLocaleString()}\nاسٹیٹس: ${getStatusLabel(order.status, lang === 'ur')}\nشکریہ!`
+                          })}
+                          className="w-12 h-12 object-cover rounded-md border border-sky-300 hover:scale-105 transition-transform cursor-pointer shadow-xs"
+                          title={lang === 'ur' ? `تصویر ${imgIdx + 1} بڑی کریں` : `Enlarge image ${imgIdx + 1}`}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex justify-between">

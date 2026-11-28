@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { db, sanitizeShopAddress, type GoldPurchase } from '../db';
 import { translations, type Language } from '../translations';
 import { Save, Printer, Camera, RotateCcw, Image as ImageIcon, Users, Plus } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
 import { PrintReceipt } from './PrintReceipt';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -12,6 +11,7 @@ import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 import { APP_CONFIG } from '../config';
 import { compressImage } from '../lib/utils';
 import { showToast } from '../lib/toast';
+import { printElementDirectly } from '../lib/printUtils';
 
 interface PurchasesProps {
   lang: Language;
@@ -66,16 +66,10 @@ export default function Purchases({ lang }: PurchasesProps) {
     localStorage.setItem('gold_purchase_draft', JSON.stringify(draft));
   }, [name, phone, weight, rate]);
 
-  const handlePrint = useReactToPrint({
-    contentRef: componentRef,
-    documentTitle: `Purchase_${printItem?.name || name || 'new'}`,
-    onAfterPrint: () => setPrintItem(null)
-  });
-
   const executePrint = async () => {
-    if (Capacitor.isNativePlatform()) {
-      if (!componentRef.current) return;
-      try {
+    if (!componentRef.current) return;
+    try {
+      if (Capacitor.isNativePlatform()) {
         const canvas = await html2canvas(componentRef.current, {
           scale: 3.0,
           useCORS: true,
@@ -119,13 +113,17 @@ export default function Purchases({ lang }: PurchasesProps) {
           data: base64Data,
           mimeType: 'application/pdf',
         });
-      } catch (e) {
-        console.error('Error with native print', e);
-        handlePrint();
+        setPrintItem(null);
+        return;
       }
-    } else {
-      handlePrint();
+    } catch (e) {
+      console.error('Error with native print', e);
     }
+
+    await printElementDirectly(componentRef.current, {
+      documentTitle: `Purchase_${printItem?.name || name || 'new'}`,
+      onAfterPrint: () => setPrintItem(null),
+    });
   };
 
   useEffect(() => {

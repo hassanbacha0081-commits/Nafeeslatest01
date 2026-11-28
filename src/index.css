@@ -253,6 +253,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
 }
 
+@media screen {
+  #direct-print-mount {
+    display: none !important;
+  }
+}
+
 @media print {
   @page {
     size: 14.8cm 21cm;
@@ -263,5 +269,165 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   }
   body {
     background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  body.is-direct-printing > *:not(#direct-print-mount) {
+    display: none !important;
+  }
+  body.is-direct-printing {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  body.is-direct-printing > #direct-print-mount {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  /* Enforce scale-to-fit for A5 Jewelry Tags so weight, polish, and total weight never clip */
+  .print-tags-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags {
+    width: 100% !important;
+    max-width: 140mm !important;
+    margin: 0 auto !important;
+    padding: 1mm !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .grid {
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 4px !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .grid.grid-cols-2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .grid.grid-cols-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .print-tags-wrapper .tag-card-print:not(.barbell-ring-tag):not(.barcode-sticker-tag) {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    overflow: visible !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .tag-card-print:not(.barbell-ring-tag):not(.barcode-sticker-tag) {
+    zoom: 0.92;
+    padding: 3px !important;
+  }
+
+  .print-tags-wrapper .barbell-ring-tag {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    width: 6cm !important;
+    min-width: 6cm !important;
+    max-width: 6cm !important;
+    height: 1.2cm !important;
+    min-height: 1.2cm !important;
+    max-height: 1.2cm !important;
+    flex: 0 0 auto !important;
+    zoom: 1 !important;
+    padding: 1.5px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  .print-tags-wrapper .barcode-sticker-tag {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+    width: 1.5in !important;
+    min-width: 1.5in !important;
+    max-width: 1.5in !important;
+    height: 0.5in !important;
+    min-height: 0.5in !important;
+    max-height: 0.5in !important;
+    flex: 0 0 auto !important;
+    zoom: 1 !important;
+    padding: 1.5px 3px !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+  }
+
+  .print-tags-wrapper .tag-card-print * {
+    box-sizing: border-box !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .tag-metrics-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    padding: 3px 4px !important;
+  }
+
+  .print-tags-wrapper .barbell-ring-tag .tag-metrics-box {
+    padding: 1px 2px !important;
+    overflow: hidden !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .tag-metric-row {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    flex-wrap: nowrap !important;
+    gap: 3px !important;
+    line-height: 1.45 !important;
+  }
+
+  .print-tags-wrapper .barbell-ring-tag .tag-metric-row {
+    gap: 2px !important;
+    line-height: 1.05 !important;
+  }
+
+  .print-tags-wrapper.print-a5-tags .tag-metric-value {
+    overflow: visible !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    font-size: 8.5px !important;
+    line-height: 1.25 !important;
+  }
+
+  .print-tags-wrapper .barbell-ring-tag .tag-metric-value {
+    font-size: 6.5px !important;
+    line-height: 1 !important;
+  }
+
+  .print-tags-wrapper .tag-card-print svg {
+    max-width: 100% !important;
+    height: auto !important;
+    shape-rendering: crispEdges !important;
+  }
+
+  .print-tags-wrapper .barcode-sticker-tag svg,
+  .print-tags-wrapper .barbell-ring-tag svg {
+    max-height: 25px !important;
   }
 }
+

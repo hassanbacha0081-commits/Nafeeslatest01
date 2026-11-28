@@ -9,7 +9,6 @@ import {
   Image as ImageIcon, FileText
 } from 'lucide-react';
 import { sharePdfViaWhatsApp } from '../lib/whatsappShare';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -22,6 +21,7 @@ import { ConfirmModal } from './ConfirmModal';
 import { APP_CONFIG } from '../config';
 import { MultiSelectInput } from './MultiSelectInput';
 import { PhoneChannelLogos } from './PhoneChannelLogos';
+import { printElementDirectly } from '../lib/printUtils';
 
 interface KhaataProps {
   lang: Language;
@@ -77,13 +77,6 @@ export function Khaata({ lang }: KhaataProps) {
   const [shareStatusMsg, setShareStatusMsg] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
 
   const printRef = useRef<HTMLDivElement>(null);
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Khaata_Statement`,
-    onAfterPrint: () => {
-      setIsPrinting(false);
-    }
-  });
 
   // Self-healing check for restored backups: synthesize accounts if entries exist but accounts missing
   useEffect(() => {
@@ -130,13 +123,18 @@ export function Khaata({ lang }: KhaataProps) {
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint();
       }
-    } else {
-      handlePrint();
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `Khaata_Statement`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const generatePDF = async (): Promise<string | null> => {

@@ -10,6 +10,25 @@ export interface SalesItem {
   mz?: number; // Mazdori/Labor
   img?: string | null;
   imgs?: string[];
+  tagCode?: string;
+  printedTagId?: number;
+  stockItemId?: number;
+}
+
+export interface PrintedTag {
+  id?: number;
+  tagCode: string;
+  name: string;
+  karat?: string;
+  netWeight: number;
+  polish: number;
+  totalWeight: number;
+  making: number;
+  stockItemId?: number | null;
+  status: 'available' | 'sold';
+  createdAt: string;
+  soldAt?: string;
+  saleId?: number;
 }
 
 export interface Sale {
@@ -181,6 +200,7 @@ export class MyDatabase extends Dexie {
   khaataAccounts!: Table<KhaataAccount>;
   khaata!: Table<KhaataEntry>;
   contacts!: Table<ContactItem>;
+  printedTags!: Table<PrintedTag>;
 
   get khaataEntries(): Table<KhaataEntry> {
     return this.khaata;
@@ -200,6 +220,20 @@ export class MyDatabase extends Dexie {
       khaataAccounts: '++id, name',
       khaata: '++id, accountId, date',
       contacts: '++id, name, phone'
+    });
+    this.version(10).stores({
+      sales: '++id, name, phone, date',
+      orders: '++id, name, phone, status, due, karigar',
+      karigars: '++id, name, phone, date',
+      repairs: '++id, customerName, status, date',
+      stock: '++id, name, type, [name+type]',
+      settings: 'key',
+      goldPurchases: '++id, name, phone, date',
+      expenses: '++id, category, date',
+      khaataAccounts: '++id, name',
+      khaata: '++id, accountId, date',
+      contacts: '++id, name, phone',
+      printedTags: '++id, tagCode, name, status, stockItemId, saleId'
     });
   }
 }

@@ -3,7 +3,6 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db, type StockItem } from '../db';
 import { translations, type Language } from '../translations';
 import { Plus, Trash2, Edit2, Package, Coins, Camera, RotateCcw, Image as ImageIcon, AlertTriangle, Printer, X, Download, AlertCircle, Search, Tag, Barcode, Sparkles, LayoutGrid, List } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { PrintReceipt } from './PrintReceipt';
@@ -18,10 +17,13 @@ import ImageLightbox from './ImageLightbox';
 import { gramsToTolaMashaRatti, compressImage } from '../lib/utils';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 import { showToast } from '../lib/toast';
+import { printElementDirectly } from '../lib/printUtils';
 
 interface StockProps {
   lang: Language;
 }
+
+const EMPTY_STOCK_ITEMS: StockItem[] = [];
 
 export default function Stock({ lang }: StockProps) {
   const t = translations[lang];
@@ -60,12 +62,6 @@ export default function Stock({ lang }: StockProps) {
 
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Stock_${printData?.id || 'new'}`,
-    onAfterPrint: () => setIsPrinting(false)
-  });
-
   const executePrint = async () => {
     if (Capacitor.isNativePlatform() && pdfUrl) {
       try {
@@ -75,13 +71,18 @@ export default function Stock({ lang }: StockProps) {
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint();
       }
-    } else {
-      handlePrint();
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `Stock_${printData?.id || 'new'}`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const generatePDF = async (data: StockItem, id: number): Promise<string | null> => {
@@ -383,6 +384,7 @@ export default function Stock({ lang }: StockProps) {
           </div>
 
           <button 
+            type="button"
             onClick={() => {
               setSelectedTagStockId(null);
               setIsTagModalOpen(true);
@@ -394,6 +396,7 @@ export default function Stock({ lang }: StockProps) {
             <span className="urdu-text">{lang === 'ur' ? 'بارکوڈ ٹیگز پرنٹ کریں' : 'Print Tags'}</span>
           </button>
           <button 
+            type="button"
             onClick={() => setIsAdding(true)}
             className="flex items-center gap-2 bg-gold text-black font-bold px-6 py-3 rounded-xl hover:bg-gold-light transition-all shadow-lg shadow-gold-20 whitespace-nowrap"
           >
@@ -708,8 +711,9 @@ export default function Stock({ lang }: StockProps) {
                   )}
                 </div>
               </div>
-              <div className="flex flex-col gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex flex-col gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                 <button 
+                  type="button"
                   onClick={() => {
                     setPrintData({ data: item, id: item.id! });
                     setShowPrintPreview(true);
@@ -729,6 +733,7 @@ export default function Stock({ lang }: StockProps) {
                   <Printer size={18} />
                 </button>
                 <button 
+                  type="button"
                   onClick={() => {
                     setSelectedTagStockId(item.id!);
                     setIsTagModalOpen(true);
@@ -740,6 +745,7 @@ export default function Stock({ lang }: StockProps) {
                 </button>
                 {item.img && (
                   <button 
+                    type="button"
                     onClick={() => showImg(item.img!)}
                     className="p-2 text-zinc-500 hover:text-gold-dark transition-colors"
                   >
@@ -747,6 +753,7 @@ export default function Stock({ lang }: StockProps) {
                   </button>
                 )}
                 <button 
+                  type="button"
                   onClick={() => item.id && setDeleteId(item.id)}
                   className="p-2 text-zinc-400 hover:text-red-600 transition-colors"
                 >
@@ -766,7 +773,7 @@ export default function Stock({ lang }: StockProps) {
       <JewelryTagModal 
         isOpen={isTagModalOpen}
         onClose={() => setIsTagModalOpen(false)}
-        stockItems={stock || []}
+        stockItems={stock ?? EMPTY_STOCK_ITEMS}
         initialSelectedId={selectedTagStockId}
         lang={lang}
       />

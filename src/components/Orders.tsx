@@ -5,7 +5,6 @@ import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
 import { Plus, Check, Trash2, Camera, RotateCcw, MessageCircle, Printer, X, Download, AlertCircle, Image as ImageIcon, Scale, Sparkles, Hammer, Eye, EyeOff, Filter, Search, Users } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { PrintReceipt } from './PrintReceipt';
@@ -17,6 +16,7 @@ import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 
 import { APP_CONFIG } from '../config';
+import { printElementDirectly } from '../lib/printUtils';
 
 interface OrdersProps {
   lang: Language;
@@ -80,14 +80,6 @@ export default function Orders({ lang }: OrdersProps) {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Order_${printData?.id || 'new'}`,
-    onAfterPrint: () => {
-      setIsPrinting(false);
-    }
-  });
-
   const executePrint = async () => {
     if (Capacitor.isNativePlatform() && pdfUrl) {
       try {
@@ -97,13 +89,18 @@ export default function Orders({ lang }: OrdersProps) {
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint();
       }
-    } else {
-      handlePrint();
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `Order_${printData?.id || 'new'}`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const generatePDF = async (data: Order, id: number): Promise<string | null> => {

@@ -235,6 +235,7 @@ export default function Settings({
       const expenses = await db.expenses.toArray();
       const khaataAccounts = await db.khaataAccounts.toArray();
       const khaata = await db.khaata.toArray();
+      const printedTags = db.printedTags ? await db.printedTags.toArray() : [];
 
       const data = { 
         sales, 
@@ -247,6 +248,7 @@ export default function Settings({
         expenses, 
         khaataAccounts, 
         khaata,
+        printedTags,
         // Compatibility aliases for older versions or external imports
         khataAccounts: khaataAccounts,
         khata: khaata
@@ -314,7 +316,8 @@ export default function Settings({
               db.goldPurchases.clear(),
               db.expenses.clear(),
               db.khaataAccounts.clear(),
-              db.khaata.clear()
+              db.khaata.clear(),
+              db.printedTags?.clear()
             ]);
 
             // Helper to restore standard tables safely
@@ -349,6 +352,9 @@ export default function Settings({
             if (purchases.length > 0) await restoreTable(db.goldPurchases, purchases, 'goldPurchases');
 
             if (root.expenses && root.expenses.length > 0) await restoreTable(db.expenses, root.expenses, 'expenses');
+            if (root.printedTags && root.printedTags.length > 0 && db.printedTags) {
+              await restoreTable(db.printedTags, root.printedTags, 'printedTags');
+            }
 
             // 2. Comprehensive Khaata Section Restoration
             // Inspect any naming variations: khaataAccounts, khataAccounts, accounts, khatas, etc.
@@ -621,7 +627,8 @@ export default function Settings({
             db.goldPurchases.clear(),
             db.expenses.clear(),
             db.khaataAccounts.clear(),
-            db.khaata.clear()
+            db.khaata.clear(),
+            db.printedTags?.clear()
           ]);
           window.location.reload();
         } catch (err) {

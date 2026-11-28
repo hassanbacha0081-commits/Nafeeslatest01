@@ -4,7 +4,6 @@ import { translations, type Language } from '../translations';
 import { formatDate, compressImage } from '../lib/utils';
 import { showToast } from '../lib/toast';
 import { Camera, RotateCcw, Trash2, Printer, Plus, X, ShoppingBag, Download, AlertCircle, CheckCircle2, Users, Image as ImageIcon, Barcode, Tag } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
 import { AnimatePresence, motion } from 'motion/react';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
@@ -14,6 +13,7 @@ import { Filesystem, Directory } from '@capacitor/filesystem';
 import { Share } from '@capacitor/share';
 import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
+import { printElementDirectly } from '../lib/printUtils';
 interface BillingProps {
   lang: Language;
   editingSale: Sale | null;
@@ -22,6 +22,8 @@ interface BillingProps {
 
 import ImageLightbox from './ImageLightbox';
 import ContactPickerModal from './ContactPickerModal';
+import BarcodeScannerModal from './BarcodeScannerModal';
+import { applySaleStockAndTagUpdates, revertSaleStockAndTagUpdates } from '../lib/stockSync';
 
 export default function Billing({ lang, editingSale, setEditingSale }: BillingProps) {
   const t = translations[lang];
@@ -50,16 +52,73 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
 
   const [barcodeInput, setBarcodeInput] = useState('');
   const [barcodeStatus, setBarcodeStatus] = useState<string | null>(null);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannedTagMeta, setScannedTagMeta] = useState<{
+    tagCode?: string;
+    printedTagId?: number;
+    stockItemId?: number;
+  } | null>(null);
 
   const handleBarcodeScan = async (code: string) => {
     const query = code.trim();
     if (!query) return;
 
     try {
+      // 1. Check Saved Printed Tags Registry first (exact case-insensitive tagCode match)
+      if (db.printedTags) {
+        const allTags = await db.printedTags.toArray();
+        const queryUpper = query.toUpperCase();
+        const matchedTag = allTags.find(t => t.tagCode.trim().toUpperCase() === queryUpper);
+
+        if (matchedTag) {
+          if (matchedTag.status === 'sold') {
+            const soldMsg =
+              lang === 'ur'
+                ? `⚠ ٹیگ ${matchedTag.tagCode} پہلے ہی فروخت ہو چکا ہے${matchedTag.saleId ? ` (بل #${matchedTag.saleId})` : ''}`
+                : `⚠ Tag ${matchedTag.tagCode} is already sold${matchedTag.saleId ? ` (Bill #${matchedTag.saleId})` : ''}`;
+            setBarcodeStatus(soldMsg);
+            showToast(soldMsg, 'warning');
+            setTimeout(() => setBarcodeStatus(null), 4000);
+            return;
+          }
+
+          setFormData(prev => ({
+            ...prev,
+            iName: matchedTag.name || prev.iName,
+            iWt: matchedTag.netWeight > 0 ? matchedTag.netWeight : prev.iWt,
+            iMk: matchedTag.polish || 0,
+            iMazdori: matchedTag.making || 0,
+            iQty: 1,
+          }));
+          setScannedTagMeta({
+            tagCode: matchedTag.tagCode,
+            printedTagId: matchedTag.id,
+            stockItemId: matchedTag.stockItemId ?? undefined,
+          });
+
+          if (matchedTag.stockItemId) {
+            const linkedStock = await db.stock.get(matchedTag.stockItemId);
+            if (linkedStock?.img) {
+              setLastImg(linkedStock.img);
+            }
+          }
+
+          const statusTxt =
+            lang === 'ur'
+              ? `✓ ٹیگ ${matchedTag.tagCode}: ${matchedTag.name} (${matchedTag.netWeight}g)`
+              : `✓ Tag ${matchedTag.tagCode}: ${matchedTag.name} (${matchedTag.netWeight}g)`;
+          setBarcodeStatus(statusTxt);
+          showToast(statusTxt, 'success');
+          setBarcodeInput('');
+          setTimeout(() => setBarcodeStatus(null), 4000);
+          return;
+        }
+      }
+
+      // 2. Fallback: Check Stock by NJ-XXXX, numeric ID, or name
       const allStocks = await db.stock.toArray();
       let found = null;
 
-      // Check if tag code NJ-XXXX or numeric ID
       if (query.toUpperCase().startsWith('NJ-')) {
         const idNum = parseInt(query.toUpperCase().replace('NJ-', ''), 10);
         found = allStocks.find(s => s.id === idNum);
@@ -68,7 +127,6 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         found = allStocks.find(s => s.id === idNum);
       }
 
-      // Check if name contains or exact match
       if (!found) {
         found = allStocks.find(s => s.name.toLowerCase() === query.toLowerCase());
       }
@@ -80,17 +138,30 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
         setFormData(prev => ({
           ...prev,
           iName: found.name,
-          iWt: found.quantity || prev.iWt,
-          iQty: 1
+          iWt: found.type === 'Gold' ? (found.quantity || prev.iWt) : prev.iWt,
+          iQty: 1,
+          iMk: 0,
+          iMazdori: 0,
         }));
+        setScannedTagMeta({
+          tagCode: query.toUpperCase().startsWith('NJ-') ? query.toUpperCase() : undefined,
+          stockItemId: found.id,
+        });
         if (found.img) {
           setLastImg(found.img);
         }
-        setBarcodeStatus(lang === 'ur' ? `✓ ملا: ${found.name} (${found.quantity}g)` : `✓ Found: ${found.name} (${found.quantity}g)`);
+        const statusTxt =
+          lang === 'ur'
+            ? `✓ اسٹاک: ${found.name} (${found.quantity}${found.unit || 'g'})`
+            : `✓ Stock: ${found.name} (${found.quantity}${found.unit || 'g'})`;
+        setBarcodeStatus(statusTxt);
+        showToast(statusTxt, 'success');
         setBarcodeInput('');
         setTimeout(() => setBarcodeStatus(null), 3500);
       } else {
-        setBarcodeStatus(lang === 'ur' ? '⚠ کوئی آئٹم نہیں ملا' : '⚠ No stock item found');
+        const notFoundMsg = lang === 'ur' ? '⚠ کوئی ٹیگ یا آئٹم نہیں ملا' : '⚠ No matching tag or stock item found';
+        setBarcodeStatus(notFoundMsg);
+        showToast(notFoundMsg, 'warning');
         setTimeout(() => setBarcodeStatus(null), 3000);
       }
     } catch (err) {
@@ -105,14 +176,6 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Bill_${printData?.id || 'new'}`,
-    onAfterPrint: () => {
-      setIsPrinting(false);
-    }
-  });
-
   const executePrint = async () => {
     if (Capacitor.isNativePlatform() && pdfUrl) {
       try {
@@ -122,13 +185,18 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint(); // fallback to standard browser print if error occurs
       }
-    } else {
-      handlePrint(); // Web fallback 
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `Bill_${printData?.id || 'new'}`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const previewScrollRef = useRef<HTMLDivElement>(null);
@@ -283,6 +351,7 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       discount: 0,
       paidToCustomer: 0
     });
+    setScannedTagMeta(null);
   };
 
   const calcOldValue = () => {
@@ -311,10 +380,14 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
       r: formData.iRate,
       t: (formData.iWt + formData.iMk) * formData.iRate + formData.iMazdori,
       mz: formData.iMazdori || 0,
-      img: lastImg
+      img: lastImg,
+      ...(scannedTagMeta?.tagCode ? { tagCode: scannedTagMeta.tagCode } : {}),
+      ...(scannedTagMeta?.printedTagId ? { printedTagId: scannedTagMeta.printedTagId } : {}),
+      ...(scannedTagMeta?.stockItemId ? { stockItemId: scannedTagMeta.stockItemId } : {}),
     };
     setBillItems([...billItems, newItem]);
     setLastImg(null);
+    setScannedTagMeta(null);
     setFormData({ ...formData, iName: '', iWt: 0, iQty: 1, iMk: 0, iMazdori: 0 });
     showToast(lang === 'ur' ? `✓ ${newItem.n} بل میں شامل ہو گیا` : `✓ ${newItem.n} added to bill`, 'success');
   };
@@ -420,44 +493,31 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
     try {
       if (editingSale?.id) {
         data.id = editingSale.id;
+        await revertSaleStockAndTagUpdates(editingSale.items || [], editingSale.id);
         await db.sales.put(data);
         finalId = editingSale.id;
       } else {
         finalId = await db.sales.add(data) as number;
-        
-        // --- NEW: Automatically Deduct Weight and Pieces from Stock ---
-        try {
-          const allStocks = await db.stock.toArray();
-          
-          for (const item of data.items) {
-            // Find stock item by name
-            let targetStock = allStocks.find(s => s.name === item.n);
-            
-            // If item has weight but no specific stock found, optional: subtract from a general gold bucket
-            // Here we prioritize exact name match as requested
-            
-            if (targetStock && targetStock.id) {
-              const isOldGold = item.t < 0; 
-              
-              // Updates
-              const weightDiff = isOldGold ? item.w : -item.w;
-              const pieceDiff = isOldGold ? (item.p || 0) : -(item.p || 1);
-              
-              const newQty = Number((targetStock.quantity + weightDiff).toFixed(2));
-              const newPieces = (targetStock.pieces || 0) + pieceDiff;
-              
-              await db.stock.update(targetStock.id, { 
-                quantity: Math.max(0, newQty), 
-                pieces: Math.max(0, newPieces) 
-              });
-              
-              // Update memory ref for consecutive items in same bill
-              targetStock.quantity = newQty;
-              targetStock.pieces = newPieces;
-            }
-          }
-        } catch (stockErr) {
-          console.error("Stock deduction error:", stockErr);
+      }
+
+      // Automatically deduct matched stock & mark scanned printed tags as sold
+      const syncResult = await applySaleStockAndTagUpdates(data.items, finalId);
+      if (syncResult.deducted.length > 0 || syncResult.soldTagCodes.length > 0) {
+        const depleted = syncResult.deducted.filter(d => d.remainingQty <= 0);
+        if (depleted.length > 0) {
+          showToast(
+            lang === 'ur'
+              ? `اسٹاک اپڈیٹ: ${depleted.map(d => d.name).join('، ')} کا اسٹاک ختم ہو گیا ہے`
+              : `Stock updated: ${depleted.map(d => d.name).join(', ')} is now out of stock`,
+            'warning'
+          );
+        } else {
+          showToast(
+            lang === 'ur'
+              ? `✓ بل محفوظ، اسٹاک اپڈیٹ${syncResult.soldTagCodes.length ? ` اور ${syncResult.soldTagCodes.length} ٹیگ فروخت` : ''}`
+              : `✓ Bill saved & stock updated${syncResult.soldTagCodes.length ? ` (${syncResult.soldTagCodes.length} tag(s) marked sold)` : ''}`,
+            'success'
+          );
         }
       }
       
@@ -783,6 +843,15 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                 >
                   {lang === 'ur' ? 'تلاش کریں' : 'Find'}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setIsScannerOpen(true)}
+                  className="bg-sky-600 hover:bg-sky-700 text-white font-bold px-3.5 py-2.5 rounded-xl text-sm shadow-sm transition-all flex items-center gap-1.5 whitespace-nowrap"
+                  title={lang === 'ur' ? 'کیمرہ سے بارکوڈ اسکین کریں' : 'Scan Barcode with Camera'}
+                >
+                  <Camera size={17} />
+                  <span className="urdu-text hidden sm:inline">{lang === 'ur' ? 'کیمرہ اسکین' : 'Scan'}</span>
+                </button>
               </div>
               {barcodeStatus && (
                 <span className="text-xs font-bold font-mono text-amber-900 bg-amber-100 px-3 py-1.5 rounded-lg border border-amber-300 animate-in fade-in whitespace-nowrap">
@@ -970,8 +1039,14 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
                             <Trash2 size={16} />
                           </button>
                         </div>
-                        <div className="flex justify-between items-center mt-2">
+                        <div className="flex justify-between items-center mt-2 gap-1.5">
                           <span className="text-[10px] font-mono font-bold text-zinc-500 bg-white px-2 py-0.5 rounded border border-sky-100">{item.w}g @ {item.r.toLocaleString()}</span>
+                          {item.tagCode && (
+                            <span className="text-[10px] font-mono font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded border border-amber-200 flex items-center gap-1">
+                              <Tag size={10} />
+                              {item.tagCode}
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -1119,6 +1194,15 @@ export default function Billing({ lang, editingSale, setEditingSale }: BillingPr
             cName: contact.name,
             cPhone: contact.phone
           }));
+        }}
+        lang={lang}
+      />
+      <BarcodeScannerModal
+        isOpen={isScannerOpen}
+        onClose={() => setIsScannerOpen(false)}
+        onScan={(code) => {
+          setBarcodeInput(code);
+          void handleBarcodeScan(code);
         }}
         lang={lang}
       />

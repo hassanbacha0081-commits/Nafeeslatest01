@@ -27,7 +27,6 @@ import {
 } from 'lucide-react';
 import { formatWhatsAppUrl } from '../lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { Capacitor } from '@capacitor/core';
@@ -38,6 +37,7 @@ import { APP_CONFIG } from '../config';
 import { PrintReceipt } from './PrintReceipt';
 import ImageLightbox from './ImageLightbox';
 import { WhatsAppLogo } from './PhoneChannelLogos';
+import { printElementDirectly } from '../lib/printUtils';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 
 interface CustomersProps {
@@ -184,11 +184,6 @@ export default function Customers({ lang }: CustomersProps) {
   const khaataAccounts = useLiveQuery(() => db.khaataAccounts.toArray(), []) || [];
   const khaataEntries = useLiveQuery(() => db.khaata.toArray(), []) || [];
 
-  const handleReactPrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `${printData?.type || 'Receipt'}_${printData?.id || 'record'}`
-  });
-
   const previewScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -267,7 +262,10 @@ export default function Customers({ lang }: CustomersProps) {
         // fallback below
       }
     }
-    handleReactPrint();
+    await printElementDirectly(printRef.current, {
+      documentTitle: `${printData?.type || 'Receipt'}_${printData?.id || 'record'}`,
+      fallbackPdfUrl: pdfUrl,
+    });
   };
 
   const downloadPDF = async () => {

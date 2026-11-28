@@ -7,7 +7,6 @@ import { motion, AnimatePresence } from 'motion/react';
 import { formatWhatsAppUrl } from '../lib/utils';
 import { useDebouncedValue } from '../lib/useDebouncedValue';
 import { showToast } from '../lib/toast';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { PrintReceipt } from './PrintReceipt';
@@ -18,6 +17,8 @@ import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 
 import { APP_CONFIG } from '../config';
+import { printElementDirectly } from '../lib/printUtils';
+import { revertSaleStockAndTagUpdates } from '../lib/stockSync';
 
 import ImageLightbox from './ImageLightbox';
 import WhatsAppShareModal, { type WhatsAppShareData } from './WhatsAppShareModal';
@@ -52,14 +53,6 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
   const [expandedSales, setExpandedSales] = useState<Record<number, boolean>>({});
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `${printData?.type === 'sale' ? 'Bill' : 'Purchase'}_${printData?.id || 'record'}`,
-    onAfterPrint: () => {
-      setIsPrinting(false);
-    }
-  });
-
   const executePrint = async () => {
     if (Capacitor.isNativePlatform() && pdfUrl) {
       try {
@@ -69,13 +62,18 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint();
       }
-    } else {
-      handlePrint();
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `${printData?.type === 'sale' ? 'Bill' : 'Purchase'}_${printData?.id || 'record'}`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const previewScrollRef = useRef<HTMLDivElement>(null);
@@ -256,6 +254,10 @@ export default function Records({ lang, setActiveSection, setEditingSale }: Reco
   const handleDelete = async () => {
     if (!deleteId) return;
     if (deleteId.type === 'sale') {
+      const existingSale = await db.sales.get(deleteId.id);
+      if (existingSale) {
+        await revertSaleStockAndTagUpdates(existingSale.items || [], deleteId.id);
+      }
       await db.sales.delete(deleteId.id);
     } else {
       await db.goldPurchases.delete(deleteId.id);

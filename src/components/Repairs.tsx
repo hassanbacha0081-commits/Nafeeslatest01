@@ -4,7 +4,6 @@ import { db, type Repair } from '../db';
 import { translations, type Language } from '../translations';
 import { formatCurrency, formatDate, formatWhatsAppUrl, compressImage } from '../lib/utils';
 import { Plus, Check, Trash2, Clock, MessageCircle, Printer, Camera, RotateCcw, X, AlertTriangle, Download, AlertCircle, Search, Image as ImageIcon, Users } from 'lucide-react';
-import { useReactToPrint } from 'react-to-print';
 import html2canvas from 'html2canvas-pro';
 import jsPDF from 'jspdf';
 import { PrintReceipt } from './PrintReceipt';
@@ -16,6 +15,7 @@ import { Capacitor } from '@capacitor/core';
 import { Printer as CapPrinter } from '@capgo/capacitor-printer';
 
 import { APP_CONFIG } from '../config';
+import { printElementDirectly } from '../lib/printUtils';
 
 interface RepairsProps {
   lang: Language;
@@ -47,14 +47,6 @@ export default function Repairs({ lang }: RepairsProps) {
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const printRef = useRef<HTMLDivElement>(null);
 
-  const handlePrint = useReactToPrint({
-    contentRef: printRef,
-    documentTitle: `Repair_${printData?.data.customerName || 'new'}`,
-    onAfterPrint: () => {
-      setIsPrinting(false);
-    }
-  });
-
   const executePrint = async () => {
     if (Capacitor.isNativePlatform() && pdfUrl) {
       try {
@@ -64,13 +56,18 @@ export default function Repairs({ lang }: RepairsProps) {
           data: base64Data,
           mimeType: 'application/pdf',
         });
+        return;
       } catch (e) {
         console.error('Error with native print', e);
-        handlePrint();
       }
-    } else {
-      handlePrint();
     }
+
+    setIsPrinting(true);
+    await printElementDirectly(printRef.current, {
+      documentTitle: `Repair_${printData?.data.customerName || 'new'}`,
+      fallbackPdfUrl: pdfUrl,
+      onAfterPrint: () => setIsPrinting(false),
+    });
   };
 
   const generatePDF = async (data: Repair): Promise<string | null> => {
